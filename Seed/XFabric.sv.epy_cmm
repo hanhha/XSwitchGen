@@ -1,0 +1,49 @@
+// HMTH (c)
+
+module <%=cmm_prefix%>XFabric (
+    input logic clk
+  , input logic rstn
+<%for i in range(0,n_initiators):%>
+  , input  logic           <%=agents["I" + str(i)]%>_req_vld
+  , input  logic [<%=initiator_addrwidth["I" + str(i)]-1%>:0] <%=agents["I" + str(i)]%>_req_adr
+  , input  logic [<%=initiator_datawidth["I" + str(i)]-1%>:0] <%=agents["I" + str(i)]%>_req_dat
+  , output logic           <%=agents["I" + str(i)]%>_req_gnt
+  , output logic           <%=agents["I" + str(i)]%>_rsp_vld
+  , output logic [<%=initiator_datawidth["I" + str(i)]-1%>:0] <%=agents["I" + str(i)]%>_rsp_dat
+  , input  logic           <%=agents["I" + str(i)]%>_rsp_gnt
+<%%>
+
+<%for j in range(0,n_targets):%>
+  , output logic           <%=agents["T" + str(j)]%>_req_vld
+  , output logic [<%=target_addrwidth["T" + str(j)]-1%>:0] <%=agents["T" + str(j)]%>_req_adr
+  , output logic [<%=target_datawidth["T" + str(j)]-1%>:0] <%=agents["T" + str(j)]%>_req_dat
+  , input  logic      <%=agents["T" + str(j)]%>_req_gnt
+  , input  logic      <%=agents["T" + str(j)]%>_rsp_vld
+  , input  logic [<%=target_datawidth["T" + str(j)]-1%>:0] <%=agents["T" + str(j)]%>_rsp_dat
+  , output logic           <%=agents["T" + str(j)]%>_rsp_gnt
+<%%>
+);
+
+<%for i in range(0,n_initiators):%>
+logic           <%=agents["I" + str(i)]%>_req_vld;
+logic [VDW-1:0] <%=agents["I" + str(i)]%>_req_pkt;
+logic           <%=agents["I" + str(i)]%>_req_gnt;
+logic           <%=agents["I" + str(i)]%>_rsp_vld;
+logic [VDW-1:0] <%=agents["I" + str(i)]%>_rsp_pkt;
+logic           <%=agents["I" + str(i)]%>_rsp_gnt;
+
+<%=cmm_prefix>XMstTrans #(.AW (<%=%>)
+<%%>
+
+<%for j in range(0,n_targets):%>
+logic           <%=agents["T" + str(j)]%>_req_vld;
+logic [VDW-1:0] <%=agents["T" + str(j)]%>_req_pkt;
+logic           <%=agents["T" + str(j)]%>_req_gnt;
+logic           <%=agents["T" + str(j)]%>_rsp_vld;
+logic [VDW-1:0] <%=agents["T" + str(j)]%>_rsp_pkt;
+logic           <%=agents["T" + str(j)]%>_rsp_gnt;
+<%%>
+
+// TODO: instantiate Switch, PktTrans
+endmodule
+// EOF

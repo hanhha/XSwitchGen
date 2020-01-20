@@ -1,0 +1,54 @@
+// HMTH (c)
+
+module <%=cmm_prefix%>XSwitch #(parameter VDW = <%=vdw%>) (
+    input logic clk
+  , input logic rstn
+
+<%for i in range(0,n_initiators):%>
+  , input  logic           <%=agents["I" + str(i)]%>_req_vld
+  , input  logic [VDW-1:0] <%=agents["I" + str(i)]%>_req_pkt
+  , output logic           <%=agents["I" + str(i)]%>_req_gnt
+  , output logic           <%=agents["I" + str(i)]%>_rsp_vld
+  , output logic [VDW-1:0] <%=agents["I" + str(i)]%>_rsp_pkt
+  , input  logic           <%=agents["I" + str(i)]%>_rsp_gnt
+<%%>
+
+<%for j in range(0,n_targets):%>
+  , output logic           <%=agents["T" + str(j)]%>_req_vld
+  , output logic [VDW-1:0] <%=agents["T" + str(j)]%>_req_pkt
+  , input  logic           <%=agents["T" + str(j)]%>_req_gnt
+  , input  logic           <%=agents["T" + str(j)]%>_rsp_vld
+  , input  logic [VDW-1:0] <%=agents["T" + str(j)]%>_rsp_pkt
+  , output logic           <%=agents["T" + str(j)]%>_rsp_gnt
+<%%>
+);
+
+<%=cmm_prefix%>req_XRouter req_route (  .clk (clk), .rstn (rstn)
+<%for i in range(0,n_initiators):%>
+                 , .I<%=i%>_vld (<%=agents["I" + str(i)]%>_req_vld)
+                 , .I<%=i%>_pkt (<%=agents["I" + str(i)]%>_req_pkt)
+                 , .I<%=i%>_gnt (<%=agents["I" + str(i)]%>_req_gnt)
+<%%>
+
+<%for j in range(0,n_targets):%>
+                 , .T<%=j%>_vld (<%=agents["T" + str(j)]%>_req_vld)
+                 , .T<%=j%>_pkt (<%=agents["T" + str(j)]%>_req_pkt)
+                 , .T<%=j%>_rdy (<%=agents["T" + str(j)]%>_req_gnt)
+<%%>
+                );
+
+<%=cmm_prefix%>rsp_XRouter rsp_route (  .clk (clk), .rstn (rstn)
+<%for j in range(0,n_targets):%>
+                 , .I<%=j%>_vld (<%=agents["T" + str(j)]%>_rsp_vld)
+                 , .I<%=j%>_pkt (<%=agents["T" + str(j)]%>_rsp_pkt)
+                 , .I<%=j%>_gnt (<%=agents["T" + str(j)]%>_rsp_gnt)
+<%%>
+
+<%for i in range(0,n_initiators):%>
+                 , .T<%=i%>_vld (<%=agents["I" + str(i)]%>_rsp_vld)
+                 , .T<%=i%>_pkt (<%=agents["I" + str(i)]%>_rsp_pkt)
+                 , .T<%=i%>_rdy (<%=agents["I" + str(i)]%>_rsp_gnt)
+<%%>
+                );
+endmodule
+// EOF

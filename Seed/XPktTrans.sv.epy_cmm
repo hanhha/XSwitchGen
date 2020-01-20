@@ -1,0 +1,230 @@
+// HMTH (c)
+module <%=cmm_prefix%>XMstTrans #(parameter AW = 19, DW = 8, VDW = 34, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
+    input logic clk
+  , input logic rstn
+
+  , input  logic           req_vld
+  , output logic           req_gnt
+  , input  logic [AW-1:0]  req_adr
+  , input  logic [DW-1:0]  req_dat
+
+  , output logic           tpkt_vld
+  , output logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD}
+  , input  logic           tpkt_gnt
+
+  , input  logic                  rpkt_vld
+  , output logic                  rpkt_gnt
+  , input  logic [VDW-SYS_AW-1:0] rpkt_dat // {INITID, TGTID, LOAD}
+
+  , output logic           rsp_vld
+  , input  logic           rsp_gnt
+  , output logic [DW-1:0]  rsp_dat
+);
+
+localparam LOC_VDW = AW + DW + <%=targetid_width%>;
+
+logic [LOC_VDW-1:0] req_pkt, tmp_tpkt_dat;
+logic [<%=targetid_width-1%>:0] tgtid;
+
+logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
+
+<%for i in range(n_targets):%>
+assign T<%=i%>_hit = req_adr & <%=address_map["T"+str(i)][0]%> == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
+<%%>
+
+`ifndef SYNTHESIS
+// Validating address 
+  always @(*) begin
+  `ifndef RICHMAN
+    if (req_vld) assert (<%="+ ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%> == 1);
+  `else
+      assert (req_vld |-> $onehot({<%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)]%>})));
+  `endif
+  end
+`endif
+
+always @(*) begin
+  // unique_case
+  case (1'b1)
+<%for i in range(n_targets):%>
+    T<%=i%>_hit: tgtid = <%=targetid_width%>'d<%=i%>;
+<%%>
+    default: tgtid = <%=targetid_width%>'d0;
+  endcase
+end
+
+req_pkt = {tgtid, req_adr, req_dat};
+
+assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [DW+AW-1:DW], {(SYS_DW-DW){1'b0}}, tmp_tpkt_dat [DW-1:0]]};
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+  ReqBuff (.clk (clk), .rstn (rstn),
+        .din    (req_pkt),      .we      (req_vld),
+        .dout   (tmp_tpkt_dat), .re      (tpkt_gnt),
+        .full_n (req_gnt),      .empty_n (tpkt_vld)
+);
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(1))
+  RspBuff (.clk (clk), .rstn (rstn),
+        .din    (rpkt_dat [DW-1:0]), .we      (rpkt_vld),
+        .dout   (rsp_dat),           .re      (rsp_gnt),
+        .full_n (rpkt_gnt),          .empty_n (rsp_vld)
+);
+
+endmodule
+
+module <%=cmm_prefix%>XSlvTrans #(parameter AW = 19, DW = 8, VDW = 34, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
+    input logic clk
+  , input logic rstn
+
+  , input   logic           tpkt_vld
+  , input   logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD}
+  , output  logic           tpkt_gnt
+
+  , output  logic           req_vld
+  , input   logic           req_gnt
+  , output  logic [AW-1:0]  req_adr
+  , output  logic [DW-1:0]  req_dat
+
+  , input   logic           rsp_vld
+  , output  logic           rsp_gnt
+  , input   logic [DW-1:0]  rsp_dat
+
+  , output  logic                  rpkt_vld
+  , input   logic                  rpkt_gnt
+  , output  logic [VDW-SYS_AW-1:0] rpkt_dat // {INITID, TGTID, LOAD}
+);
+
+localparam LOC_VDW = AW + DW + <%=initid_width%>;
+
+logic [LOC_VDW-1:0] req_pkt;
+assign req_pkt = {tpkt_dat [VDW-1:SYS_DW+SYS_AW+<%=targetid_width%>], tpkt_dat [SYS_DW+AW-1:SYS_DW], tpkt_dat [DW-1:0]]};
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(1))
+  ReqBuff (.clk (clk), .rstn (rstn),
+        .din    (req_pkt),     .we      (tpkt_vld),
+        .dout   (tmp_req_dat), .re      (req_gnt),
+        .full_n (tpkt_gnt),    .empty_n (req_vld)
+);
+
+assign {req_adr, req_dat} = tmp_req_dat [AW+DW-1:0];
+
+logic [<%=initid_width-1%>:0] init_id;
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+  IdBuff (.clk (clk), .rstn (rstn),
+        .din    (tmp_req_dat [LOC_VDW-1:AW+DW]), .we (req_vld & req_gnt),
+        .dout   (init_id),                       .re (rsp_vld & rpkt_gnt),
+        .full_n (), .empty_n ()
+);
+
+assign rpkt_vld = rsp_vld;
+assign rsp_gnt  = rpkt_gnt;
+assign rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], {(SYS_DW-DW){1'b0}}, rsp_dat};
+
+endmodule
+
+module <%=cmm_prefix%>XFifo #(parameter DW = 40, DEPTH = 2) (
+    input logic clk
+  , input logic rstn
+
+  , input  logic [DW-1:0] din
+  , input  logic          we
+
+  , output logic [DW-1:0] dout
+  , input  logic          re
+
+  , output logic          full_n
+  , output logic          empty_n
+);
+
+localparam AW = $clog2(DEPTH);
+
+reg   [DW-1:0] mem [0:DEPTH];
+logic [AW-1:0] rptr, wptr;
+logic we_ok, re_ok;
+logic w_ovf, r_ovf;
+
+assign we_ok = we & full_n;
+assign re_ok = re & empty_n;
+
+assign dout = mem [rptr];
+
+always @(posedge clk) begin
+  if (we_ok) mem[wptr] <= din;
+end
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+  if (rstn == 1'b0) begin
+    {r_ovf, rptr}     <= {1'b0, {AW{1'b0}}};
+    {w_ovf, wptr}     <= {1'b0, {AW{1'b0}}};
+    {full_n, empty_n} <= {1'b1, 1'b0};
+  end else begin
+    case ({we_ok, re_ok})
+      2'b01: begin
+        wptr          <= wptr;
+        {r_ovf, rptr} <= rptr + 1'b1;
+        full_n        <= 1'b1;
+        empty_n       <= (rptr + 1'b1) == wptr ? 1'b0 : empty_n;
+      end
+      2'b10: begin
+        rptr <= rptr;
+        {w_ovf, wptr} <= wptr + 1'b1;
+        empty_n       <= 1'b1;
+        full_n        <= (wptr + 1'b1) == rptr ? 1'b0 : full_n;
+      end
+      2'b11: begin
+        {r_ovf, rptr} <= rptr + 1'b1;
+        {w_ovf, wptr} <= wptr + 1'b1;
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+      2'b00: begin
+        {wptr, rptr}      <= {wptr, rptr};
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+      default: begin
+        {wptr, rptr}      <= {wptr, rptr};
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+    endcase
+  end
+end
+
+`ifndef SYNTHESIS
+`ifdef FORMAL
+logic init = 1'b1;
+always @(posedge clk) begin
+  if (init) assume (~rstn);
+  init <= 1'b0;
+end
+
+// Validating FIFO's behaviors
+logic [AW:0] entry_cnt;
+
+always @(posedge clk or negedge rstn) begin
+  if (~rstn) entry_cnt <= {(AW+1){1'b0}};
+  else begin
+    case ({we & full_n, re & empty_n})
+      2'b00, 2'b11: entry_cnt <= entry_cnt;
+      2'b01: entry_cnt <= entry_cnt - 1'b1;
+      2'b10: entry_cnt <= entry_cnt + 1'b1;
+      default: entry_cnt <= entry_cnt;
+    endcase
+  end
+end
+
+always @(posedge clk) begin
+  if (rstn) begin
+    assert (entry_cnt >= 0 && entry_cnt <= DEPTH); // Entry counter must not overflow/underflow
+    if (empty_n == 1'b0) assert (entry_cnt == 0);
+    if (full_n  == 1'b0) assert (entry_cnt == DEPTH);
+  end
+end
+`endif
+`endif
+endmodule
+// EOF
