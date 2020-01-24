@@ -1,0 +1,11 @@
+<%=cmm_prefix%>req_XArbiter.sv
+<%=cmm_prefix%>req_XArbiter_RR.sv
+<%=cmm_prefix%>req_XMatrix.sv
+<%=cmm_prefix%>req_XRouter.sv
+<%=cmm_prefix%>rsp_XArbiter.sv
+<%=cmm_prefix%>rsp_XArbiter_RR.sv
+<%=cmm_prefix%>rsp_XMatrix.sv
+<%=cmm_prefix%>rsp_XRouter.sv
+<%=cmm_prefix%>XSwitch.sv
+<%=cmm_prefix%>XPktTrans.sv
+<%=cmm_prefix%>XFabric.sv

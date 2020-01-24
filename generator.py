@@ -29,6 +29,14 @@ class XRouterGen (object):
 			with open (self.env['gendir'] + "/" + os.path.splitext(basename)[0], "w") as f:
 				f.write (epython.render (self.env))
 
+	def gen_uq_files (self):
+		for filename in glob.glob(self.seed + '/*.epy_uq'):
+			with open (filename,"r") as sf:
+				epython = epy.ePython (sf.read())
+			basename = os.path.basename (filename)
+			with open (self.env['gendir'] + "/" + os.path.splitext(basename)[0], "w") as f:
+				f.write (epython.render (self.env))
+
 if __name__ == "__main__":
 	gen_cfg = ip.spec_from_file_location ('gen_cfg', "./config.py")
 	cfg     = ip.module_from_spec (gen_cfg)
@@ -42,27 +50,32 @@ if __name__ == "__main__":
 	                n_initiators     = cfg.n_initiators,
 	                n_targets        = cfg.n_targets,
 									addrwidth        = cfg.addrwidth,
+									datawidth        = cfg.datawidth,
+									sidewidth        = cfg.sidewidth,
 									agents           = cfg.agents,
 									address_map      = cfg.address_map,
-									target_addrwidth = cfg.target_addrwidth,
+									agents_addrwidth = cfg.agents_addrwidth,
+									agents_datawidth = cfg.agents_addrwidth,
+									outstanding_num  = cfg.outstanding_num,
 	                conn_matrix      = cfg.connection_matrix)
 
-	req_env ['datawidth']      = max(list(cfg.initiator_datawidth.values()))
-	req_env ['pktwidth']       = req_env['datawidth'] + max(list(cfg.target_addrwidth.values()))
+	req_env ['pktwidth']       = req_env['datawidth'] + req_env['sidewidth'] + req_env['addrwidth']
 	req_env ['initid_width']   = math.ceil(math.log2(req_env['n_initiators']))
 	req_env ['targetid_width'] = math.ceil(math.log2(req_env['n_targets']))
 	req_env ['vdw']            = req_env ['pktwidth'] + req_env ['initid_width'] + req_env ['targetid_width']
+	req_env ['fb_vdw']         = req_env ['datawidth'] + req_env['sidewidth'] + req_env ['initid_width'] + req_env ['targetid_width']
 
 	rsp_env = dict (gendir = cfg.prefix if cfg.prefix != "" else "generated",
 	                prefix = cfg.prefix + "_rsp_" if cfg.prefix != "" else "rsp_",
 									cmm_prefix = cfg.prefix + "_" if cfg.prefix != "" else "",
 	                n_initiators   = cfg.n_targets,
 	                n_targets      = cfg.n_initiators,
+									datawidth      = cfg.datawidth,
+									sidewidth      = cfg.sidewidth,
 									agents         = cfg.agents,
 	                conn_matrix    = [*zip(*cfg.connection_matrix)])
 
-	rsp_env ['datawidth']      = max(list(cfg.target_datawidth.values()))
-	rsp_env ['pktwidth']       = rsp_env['datawidth']
+	rsp_env ['pktwidth']       = rsp_env['datawidth'] + rsp_env['sidewidth']
 	rsp_env ['initid_width']   = math.ceil(math.log2(rsp_env['n_initiators']))
 	rsp_env ['targetid_width'] = math.ceil(math.log2(rsp_env['n_targets']))
 	rsp_env ['vdw']            = rsp_env ['pktwidth'] + rsp_env ['initid_width'] + rsp_env ['targetid_width']
@@ -76,4 +89,5 @@ if __name__ == "__main__":
 
 	req_gen.gen_files ()
 	req_gen.gen_cmm_files ()
+	req_gen.gen_uq_files ()
 	rsp_gen.gen_files ()
