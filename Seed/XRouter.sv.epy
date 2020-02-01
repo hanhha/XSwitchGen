@@ -26,7 +26,7 @@ always @(*) begin
   case (I<%=i%>_pkt [<%=vdw-initid_width-1%>:<%=pktwidth%>])
 <%  for j in range(0,n_targets):%>
 <%    pre = n_targets - (j + 1) %>
-    <%=targetid_width%>'d<%=j%>    : I<%=i%>_req = {<%=pre%>'b0, I<%=i%>_vld, <%=j%>'b0};
+    <%=targetid_width%>'d<%=j%>    : I<%=i%>_req = {<%=str(pre) +"'b0," if pre > 0 else ""%> I<%=i%>_vld<%=", " + str(j) + "'b0" if j > 0 else ""%>};
 <%  %>
     default : I<%=i%>_req = <%=n_targets%>'b0;
   endcase
@@ -34,7 +34,7 @@ end
 <%%>
 
 <%for i in range(0,n_initiators):%>
-assign I<%=i%>_gnt = I<%=i%>_vreq;
+assign I<%=i%>_gnt = |I<%=i%>_vreq;
 <%%>
 
 logic [<%=n_targets-1%>:0] T_rdy;

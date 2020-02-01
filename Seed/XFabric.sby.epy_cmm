@@ -10,7 +10,9 @@ smtbmc boolector
 read_verilog -sv -formal <%=cmm_prefix%>req_XMatrix.sv <%=cmm_prefix%>req_XArbiter_RR.sv <%=cmm_prefix%>req_XArbiter.sv <%=cmm_prefix%>req_XRouter.sv 
 read_verilog -sv -formal <%=cmm_prefix%>rsp_XMatrix.sv <%=cmm_prefix%>rsp_XArbiter_RR.sv <%=cmm_prefix%>rsp_XArbiter.sv <%=cmm_prefix%>rsp_XRouter.sv 
 read_verilog -sv -formal <%=cmm_prefix%>XSwitch.sv
-prep -top <%=cmm_prefix%>XSwitch
+read_verilog -sv <%=cmm_prefix%>XPktTrans.sv
+read_verilog -sv -formal <%=cmm_prefix%>XFabric.sv
+prep -top <%=cmm_prefix%>XFabric
 
 [files]
 <%=cmm_prefix%>req_XMatrix.sv
@@ -22,3 +24,5 @@ prep -top <%=cmm_prefix%>XSwitch
 <%=cmm_prefix%>rsp_XArbiter.sv
 <%=cmm_prefix%>rsp_XRouter.sv
 <%=cmm_prefix%>XSwitch.sv
+<%=cmm_prefix%>XPktTrans.sv
+<%=cmm_prefix%>XFabric.sv

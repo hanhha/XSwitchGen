@@ -1,5 +1,5 @@
 // HMTH (c)
-module <%=cmm_prefix%>XMstTrans #(parameter AW = 19, DW = 8, VDW = 34, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
+module <%=cmm_prefix%>XMstTrans #(parameter AW = 19, DW = 8, VDW = 70, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
     input logic clk
   , input logic rstn
 
@@ -28,9 +28,11 @@ logic [<%=targetid_width-1%>:0] tgtid;
 
 logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
 
+/* verilator lint_off WIDTH */
 <%for i in range(n_targets):%>
-assign T<%=i%>_hit = req_adr & <%=address_map["T"+str(i)][0]%> == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
+assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
 <%%>
+/* verilator lint_on WIDTH */
 
 `ifndef SYNTHESIS
 // Validating address 
@@ -38,7 +40,7 @@ assign T<%=i%>_hit = req_adr & <%=address_map["T"+str(i)][0]%> == <%=address_map
   `ifndef RICHMAN
     if (req_vld) assert (<%="+ ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%> == 1);
   `else
-      assert (req_vld |-> $onehot({<%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)]%>})));
+      assert (req_vld |-> $onehot({<%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>})));
   `endif
   end
 `endif
@@ -53,9 +55,9 @@ always @(*) begin
   endcase
 end
 
-req_pkt = {tgtid, req_adr, req_dat};
+assign req_pkt = {tgtid, req_adr, req_dat};
 
-assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [DW+AW-1:DW], {(SYS_DW-DW){1'b0}}, tmp_tpkt_dat [DW-1:0]]};
+assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [DW+AW-1:DW], {(SYS_DW-DW){1'b0}}, tmp_tpkt_dat [DW-1:0]};
 
 <%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
   ReqBuff (.clk (clk), .rstn (rstn),
@@ -64,7 +66,7 @@ assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(
         .full_n (req_gnt),      .empty_n (tpkt_vld)
 );
 
-<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(1))
+<%=cmm_prefix%>XFifo #(.DW(DW), .DEPTH(1))
   RspBuff (.clk (clk), .rstn (rstn),
         .din    (rpkt_dat [DW-1:0]), .we      (rpkt_vld),
         .dout   (rsp_dat),           .re      (rsp_gnt),
@@ -73,7 +75,7 @@ assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(
 
 endmodule
 
-module <%=cmm_prefix%>XSlvTrans #(parameter AW = 19, DW = 8, VDW = 34, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
+module <%=cmm_prefix%>XSlvTrans #(parameter AW = 19, DW = 8, VDW = 70, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
     input logic clk
   , input logic rstn
 
@@ -97,8 +99,8 @@ module <%=cmm_prefix%>XSlvTrans #(parameter AW = 19, DW = 8, VDW = 34, SYS_AW = 
 
 localparam LOC_VDW = AW + DW + <%=initid_width%>;
 
-logic [LOC_VDW-1:0] req_pkt;
-assign req_pkt = {tpkt_dat [VDW-1:SYS_DW+SYS_AW+<%=targetid_width%>], tpkt_dat [SYS_DW+AW-1:SYS_DW], tpkt_dat [DW-1:0]]};
+logic [LOC_VDW-1:0] req_pkt, tmp_req_dat;
+assign req_pkt = {tpkt_dat [VDW-1:SYS_DW+SYS_AW+<%=targetid_width%>], tpkt_dat [SYS_DW+AW-1:SYS_DW], tpkt_dat [DW-1:0]};
 
 <%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(1))
   ReqBuff (.clk (clk), .rstn (rstn),
@@ -111,7 +113,7 @@ assign {req_adr, req_dat} = tmp_req_dat [AW+DW-1:0];
 
 logic [<%=initid_width-1%>:0] init_id;
 
-<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+<%=cmm_prefix%>XFifo #(.DW(<%=initid_width%>), .DEPTH(OUTSTANDING_NUM))
   IdBuff (.clk (clk), .rstn (rstn),
         .din    (tmp_req_dat [LOC_VDW-1:AW+DW]), .we (req_vld & req_gnt),
         .dout   (init_id),                       .re (rsp_vld & rpkt_gnt),
@@ -138,9 +140,9 @@ module <%=cmm_prefix%>XFifo #(parameter DW = 40, DEPTH = 2) (
   , output logic          empty_n
 );
 
-localparam AW = $clog2(DEPTH);
+localparam AW = DEPTH > 1 ? $clog2(DEPTH) : 1;
 
-reg   [DW-1:0] mem [0:DEPTH];
+reg   [DW-1:0] mem [0:DEPTH-1];
 logic [AW-1:0] rptr, wptr;
 logic we_ok, re_ok;
 logic w_ovf, r_ovf;

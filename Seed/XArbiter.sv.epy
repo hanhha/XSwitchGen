@@ -39,6 +39,7 @@ assign I<%=i%>_vreq = {<%=", ".join(["T" + str(j) + "_gnt [" + str(i) + "]" for 
 <%%>
     integer i;
 
+/* verilator lint_off WIDTH */
     always @(*) begin
 <%for i in range(0, n_initiators):%>
       I<%=i%>_ones = 0;
@@ -52,6 +53,7 @@ assign I<%=i%>_vreq = {<%=", ".join(["T" + str(j) + "_gnt [" + str(i) + "]" for 
       assume (I<%=i%>_ones <= 1);
 <%%>
     end
+/* verilator lint_on WIDTH */
   `else
     always @(*) begin
 <%for i in range(0, n_initiators):%>

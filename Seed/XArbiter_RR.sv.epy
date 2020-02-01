@@ -63,13 +63,15 @@ assign gnt = |masked_req ? pos_gnt : pre_gnt;
     integer ones;
     integer i;
 
+		/* verilator lint_off WIDTH */
     always @(*) begin
       ones = 0;
       for (i = 0; i < REQ_N; i++) begin 
         ones = ones + gnt [i];
       end
-      if (req) assert (ones == 1);
+      if (|req) assert (ones == 1);
     end
+		/* verilator lint_on WIDTH */
   `else
     always @(*) begin
       assert (req |-> $onehot0 (gnt));
