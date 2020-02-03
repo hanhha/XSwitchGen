@@ -1,29 +1,30 @@
 // HMTH (c)
-module <%=cmm_prefix%>XMstTrans #(parameter AW = 19, DW = 8, VDW = 70, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
+
+// Read-Writable Master with different bus width than system data bus
+module <%=cmm_prefix%>XMstRWSTrans #(parameter AW = 19, DW = 8, VDW = 74, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
     input logic clk
   , input logic rstn
 
-  , input  logic           req_vld
-  , output logic           req_gnt
-  , input  logic [AW-1:0]  req_adr
-  , input  logic [DW-1:0]  req_dat
+  , input  logic              req_vld
+  , output logic              req_gnt
+  , input  logic [AW-1:0]     req_adr
+  , input  logic [DW-1:0]     req_dat
+	, input  logic              req_wr
+	, input  logic [(DW/8)-1:0] req_strb
 
   , output logic           tpkt_vld
-  , output logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD}
+  , output logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD = (S_ADR, WE, S_STRB, S_DATA) }
   , input  logic           tpkt_gnt
 
-  , input  logic                  rpkt_vld
-  , output logic                  rpkt_gnt
-  , input  logic [VDW-SYS_AW-1:0] rpkt_dat // {INITID, TGTID, LOAD}
+  , input  logic                               rpkt_vld
+  , output logic                               rpkt_gnt
+  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
 
   , output logic           rsp_vld
   , input  logic           rsp_gnt
   , output logic [DW-1:0]  rsp_dat
 );
 
-localparam LOC_VDW = AW + DW + <%=targetid_width%>;
-
-logic [LOC_VDW-1:0] req_pkt, tmp_tpkt_dat;
 logic [<%=targetid_width-1%>:0] tgtid;
 
 logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
@@ -33,17 +34,6 @@ logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
 assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
 <%%>
 /* verilator lint_on WIDTH */
-
-`ifndef SYNTHESIS
-// Validating address 
-  always @(*) begin
-  `ifndef RICHMAN
-    if (req_vld) assert (<%="+ ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%> == 1);
-  `else
-      assert (req_vld |-> $onehot({<%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>})));
-  `endif
-  end
-`endif
 
 always @(*) begin
   // unique_case
@@ -55,9 +45,31 @@ always @(*) begin
   endcase
 end
 
-assign req_pkt = {tgtid, req_adr, req_dat};
+localparam HIDX = $clog2 (SYS_DW / 8) - 1;
+localparam LIDX = $clog2 (DW / 8);
 
-assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [DW+AW-1:DW], {(SYS_DW-DW){1'b0}}, tmp_tpkt_dat [DW-1:0]};
+localparam SYS_STRB  = SYS_DW / 8;
+localparam LOC_VDW   = AW + SYS_DW + SYS_STRB + 1 + <%=targetid_width%>;
+
+localparam FB_VDW = VDW - SYS_AW - SYS_STRB - 1;
+
+localparam MUL_DW       = $clog2(DW);
+localparam MUL_DW_1_8th = $clog2(DW/8);
+
+logic [LOC_VDW-1:0]  req_pkt, tmp_tpkt_dat;
+logic [SYS_DW-1:0]   aligned_req_dat;
+logic [SYS_STRB-1:0] aligned_req_strb;
+
+/* verilator lint_off WIDTH */
+always @(*) begin
+	aligned_req_strb = {(SYS_STRB){1'b0}};
+	aligned_req_dat  = {(SYS_DW){1'b0}};
+	aligned_req_strb [(req_adr [HIDX:LIDX] << MUL_DW_1_8th) +: (DW/8)] = req_strb; 
+	aligned_req_dat  [(req_adr [HIDX:LIDX] << MUL_DW) +: DW] = req_dat; 
+end
+/* verilator lint_on WIDTH */
+
+assign req_pkt = {tgtid, req_adr, req_wr, aligned_req_strb, aligned_req_dat};
 
 <%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
   ReqBuff (.clk (clk), .rstn (rstn),
@@ -66,167 +78,308 @@ assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [LOC_VDW-1:DW+AW], {(
         .full_n (req_gnt),      .empty_n (tpkt_vld)
 );
 
-<%=cmm_prefix%>XFifo #(.DW(DW), .DEPTH(1))
-  RspBuff (.clk (clk), .rstn (rstn),
-        .din    (rpkt_dat [DW-1:0]), .we      (rpkt_vld),
-        .dout   (rsp_dat),           .re      (rsp_gnt),
-        .full_n (rpkt_gnt),          .empty_n (rsp_vld)
+assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [(LOC_VDW-1) -: <%=targetid_width%>], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [SYS_DW + SYS_STRB + 1 + AW - 1 : 0]};
+
+logic [HIDX - LIDX : 0] rpkt_dat_idx;
+
+<%=cmm_prefix%>XFifo #(.DW(HIDX - LIDX + 1), .DEPTH(OUTSTANDING_NUM))
+	ReqAdrBuff (.clk (clk), .rstn (rstn),
+							.din (tpkt_dat [(SYS_DW + SYS_STRB + 1 + LIDX) +: (HIDX - LIDX + 1)]), .we (tpkt_vld & tpkt_gnt),
+							.dout (rpkt_dat_idx), .re (rpkt_vld & rpkt_gnt),
+							.full_n (), .empty_n ()
 );
+
+<%=cmm_prefix%>XHndSk #(.D_WIDTH (DW))
+	RspHndSk (.clk (clk), .rstn (rstn),
+					  .vldi  (rpkt_vld), .rdyi (rpkt_gnt),
+						.vldo  (rsp_vld),  .rdyo (rsp_gnt),
+						/* verilator lint_off WIDTH */
+						.datai (rpkt_dat [(rpkt_dat_idx << MUL_DW) +: DW]),
+						/* verilator lint_on WIDTH */
+						.datao (rsp_dat)
+);
+
+`ifndef SYNTHESIS
+// Validating address 
+  `ifndef RICHMAN
+		always @(posedge clk) begin
+			if (rstn)
+				if (req_vld) assume (<%=" + ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%> == 1);
+		end
+  `else
+    asm_ADR_VLD: assume property (@(posedge clk) disable iff (~rstn) (req_vld |-> $onehot({<%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>})));
+  `endif
+`endif
 
 endmodule
 
-module <%=cmm_prefix%>XSlvTrans #(parameter AW = 19, DW = 8, VDW = 70, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
+// Read-Writable Slave with different bus width than system data bus
+module <%=cmm_prefix%>XSlvRWSTrans #(parameter AW = 19, DW = 8, VDW = 74, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
     input logic clk
   , input logic rstn
 
-  , input   logic           tpkt_vld
-  , input   logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD}
-  , output  logic           tpkt_gnt
+  , input  logic           tpkt_vld
+  , input  logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD = (S_ADR, WE, S_STRB, S_DATA) }
+  , output logic           tpkt_gnt
 
-  , output  logic           req_vld
-  , input   logic           req_gnt
-  , output  logic [AW-1:0]  req_adr
-  , output  logic [DW-1:0]  req_dat
+  , output logic              req_vld
+  , input  logic              req_gnt
+	, output logic              req_wr
+  , output logic [AW-1:0]     req_adr
+	, output logic [(DW/8)-1:0] req_strb
+  , output logic [DW-1:0]     req_dat
 
-  , input   logic           rsp_vld
-  , output  logic           rsp_gnt
-  , input   logic [DW-1:0]  rsp_dat
+  , input  logic           rsp_vld
+  , output logic           rsp_gnt
+  , input  logic [DW-1:0]  rsp_dat
 
-  , output  logic                  rpkt_vld
-  , input   logic                  rpkt_gnt
-  , output  logic [VDW-SYS_AW-1:0] rpkt_dat // {INITID, TGTID, LOAD}
+  , output logic                               rpkt_vld
+  , input  logic                               rpkt_gnt
+  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
 );
 
-localparam LOC_VDW = AW + DW + <%=initid_width%>;
+localparam SYS_STRB  = SYS_DW / 8;
 
-logic [LOC_VDW-1:0] req_pkt, tmp_req_dat;
-assign req_pkt = {tpkt_dat [VDW-1:SYS_DW+SYS_AW+<%=targetid_width%>], tpkt_dat [SYS_DW+AW-1:SYS_DW], tpkt_dat [DW-1:0]};
+`ifndef SYNTHESIS
+// Validating input
+	`ifndef RICHMAN
+		logic [SYS_STRB-1:0] s_strb;
+		/* verilator lint_off WIDTH */
+		always @(posedge clk) begin
+			if (rstn)
+				if (tpkt_vld) begin
+					s_strb = tpkt_dat [SYS_DW +: SYS_STRB];
+					assert (<%=" + ".join(["s_strb [" + str(i) + "]" for i in range(datawidth//8)])%> <= (DW / 8));
+				end
+		end
+		/* verilator lint_on WIDTH */
+	`else
+		ast_TGT_ENOUGH: assert property (@(posedge clk) disable iff (~rstn) (tpkt_vld |-> $countones(tpkt_dat [SYS_DW +: SYS_STRB]) <= (DW / 8))); 
+	`endif
+`endif
 
-<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(1))
+localparam LOC_VDW = AW + DW + <%=initid_width%> + 1 + DW/8;
+localparam FB_VDW = VDW - SYS_AW - SYS_STRB - 1;
+
+localparam HIDX = $clog2 (SYS_DW / 8) - 1;
+localparam LIDX = $clog2 (DW / 8);
+
+localparam MUL_DW       = $clog2(DW);
+localparam MUL_DW_1_8th = $clog2(DW/8);
+
+logic [LOC_VDW-1:0] req_pkt, tmp_req_attr;
+logic [DW-1:0]     tmp_req_dat;
+logic [(DW/8)-1:0] tmp_req_strb;
+logic [AW-1:0]     tmp_req_adr;
+logic              tmp_req_wr;
+
+assign tmp_req_adr  = tpkt_dat [(SYS_DW + SYS_STRB + 1) +: AW];
+/* verilator lint_off WIDTH */
+assign tmp_req_dat  = tpkt_dat [(tmp_req_adr [HIDX:LIDX] << MUL_DW) +: DW];
+assign tmp_req_strb = tpkt_dat [(SYS_DW + (tmp_req_adr [HIDX:LIDX] << MUL_DW_1_8th)) +: (DW/8)];
+/* verilator lint_on WIDTH */
+assign tmp_req_wr   = tpkt_dat [SYS_DW + SYS_STRB];
+assign req_pkt = {tpkt_dat[(VDW-1) -: <%=initid_width%>], tmp_req_adr, tmp_req_wr, tmp_req_strb, tmp_req_dat};
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
   ReqBuff (.clk (clk), .rstn (rstn),
         .din    (req_pkt),     .we      (tpkt_vld),
-        .dout   (tmp_req_dat), .re      (req_gnt),
+        .dout   (tmp_req_attr), .re      (req_gnt),
         .full_n (tpkt_gnt),    .empty_n (req_vld)
 );
 
-assign {req_adr, req_dat} = tmp_req_dat [AW+DW-1:0];
+assign {req_adr, req_wr, req_strb, req_dat} = tmp_req_attr [DW + DW/8 + 1 + AW - 1 : 0];
 
 logic [<%=initid_width-1%>:0] init_id;
 
 <%=cmm_prefix%>XFifo #(.DW(<%=initid_width%>), .DEPTH(OUTSTANDING_NUM))
   IdBuff (.clk (clk), .rstn (rstn),
-        .din    (tmp_req_dat [LOC_VDW-1:AW+DW]), .we (req_vld & req_gnt),
+        .din    (tmp_req_attr [(LOC_VDW-1) -: <%=initid_width%>]), .we (req_vld & req_gnt),
         .dout   (init_id),                       .re (rsp_vld & rpkt_gnt),
         .full_n (), .empty_n ()
 );
 
-assign rpkt_vld = rsp_vld;
-assign rsp_gnt  = rpkt_gnt;
-assign rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], {(SYS_DW-DW){1'b0}}, rsp_dat};
+logic [HIDX - LIDX : 0] rsp_dat_idx;
+
+<%=cmm_prefix%>XFifo #(.DW(HIDX - LIDX + 1), .DEPTH(OUTSTANDING_NUM))
+  AdrBuff (.clk (clk), .rstn (rstn),
+        .din    (tmp_req_attr [(DW + DW/8 + 1 + LIDX) +: (HIDX - LIDX + 1)]), .we (req_vld & req_gnt),
+        .dout   (rsp_dat_idx),                       .re (rsp_vld & rpkt_gnt),
+        .full_n (), .empty_n ()
+);
+
+logic [FB_VDW-1:0] tmp_rpkt_dat;
+logic [SYS_DW-1:0] rsp_sys_dat;
+
+always @(*) begin
+	rsp_sys_dat = {(SYS_DW){1'b0}};
+/* verilator lint_off WIDTH */
+	rsp_sys_dat [(rsp_dat_idx << MUL_DW) +: DW] = rsp_dat;
+/* verilator lint_on WIDTH */
+end
+
+assign tmp_rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], rsp_sys_dat};
+
+<%=cmm_prefix%>XHndSk #(.D_WIDTH (FB_VDW))
+	RspHndSk (.clk (clk), .rstn (rstn),
+					  .vldi (rsp_vld),  .rdyi (rsp_gnt),
+						.vldo (rpkt_vld), .rdyo (rpkt_gnt),
+						.datai (tmp_rpkt_dat),
+						.datao (rpkt_dat)
+);
 
 endmodule
 
-module <%=cmm_prefix%>XFifo #(parameter DW = 40, DEPTH = 2) (
+// Read-Writable Master with bus width as same as system data bus
+module <%=cmm_prefix%>XMstRWTrans #(parameter AW = 19, VDW = 74, OUTSTANDING_NUM = 2, ID = 0, SYS_AW = 32, SYS_DW = 32) (
     input logic clk
   , input logic rstn
 
-  , input  logic [DW-1:0] din
-  , input  logic          we
+  , input  logic                  req_vld
+  , output logic                  req_gnt
+  , input  logic [AW-1:0]         req_adr
+  , input  logic [SYS_DW-1:0]     req_dat
+	, input  logic                  req_wr
+	, input  logic [(SYS_DW/8)-1:0] req_strb
 
-  , output logic [DW-1:0] dout
-  , input  logic          re
+  , output logic           tpkt_vld
+  , output logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD = (S_ADR, WE, S_STRB, S_DATA) }
+  , input  logic           tpkt_gnt
 
-  , output logic          full_n
-  , output logic          empty_n
+  , input  logic                               rpkt_vld
+  , output logic                               rpkt_gnt
+  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+
+  , output logic               rsp_vld
+  , input  logic               rsp_gnt
+  , output logic [SYS_DW-1:0]  rsp_dat
 );
 
-localparam AW = DEPTH > 1 ? $clog2(DEPTH) : 1;
+logic [<%=targetid_width-1%>:0] tgtid;
 
-reg   [DW-1:0] mem [0:DEPTH-1];
-logic [AW-1:0] rptr, wptr;
-logic we_ok, re_ok;
-logic w_ovf, r_ovf;
+logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
 
-assign we_ok = we & full_n;
-assign re_ok = re & empty_n;
+/* verilator lint_off WIDTH */
+<%for i in range(n_targets):%>
+assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
+<%%>
+/* verilator lint_on WIDTH */
 
-assign dout = mem [rptr];
-
-always @(posedge clk) begin
-  if (we_ok) mem[wptr] <= din;
+always @(*) begin
+  // unique_case
+  case (1'b1)
+<%for i in range(n_targets):%>
+    T<%=i%>_hit: tgtid = <%=targetid_width%>'d<%=i%>;
+<%%>
+    default: tgtid = <%=targetid_width%>'d0;
+  endcase
 end
 
-`ifndef SELECT_SRSTn
-always @(posedge clk or negedge rstn) begin
-`else
-always @(posedge clk) begin
-`endif
-  if (rstn == 1'b0) begin
-    {r_ovf, rptr}     <= {1'b0, {AW{1'b0}}};
-    {w_ovf, wptr}     <= {1'b0, {AW{1'b0}}};
-    {full_n, empty_n} <= {1'b1, 1'b0};
-  end else begin
-    case ({we_ok, re_ok})
-      2'b01: begin
-        wptr          <= wptr;
-        {r_ovf, rptr} <= rptr + 1'b1;
-        full_n        <= 1'b1;
-        empty_n       <= (rptr + 1'b1) == wptr ? 1'b0 : empty_n;
-      end
-      2'b10: begin
-        rptr <= rptr;
-        {w_ovf, wptr} <= wptr + 1'b1;
-        empty_n       <= 1'b1;
-        full_n        <= (wptr + 1'b1) == rptr ? 1'b0 : full_n;
-      end
-      2'b11: begin
-        {r_ovf, rptr} <= rptr + 1'b1;
-        {w_ovf, wptr} <= wptr + 1'b1;
-        {full_n, empty_n} <= {full_n, empty_n};
-      end
-      2'b00: begin
-        {wptr, rptr}      <= {wptr, rptr};
-        {full_n, empty_n} <= {full_n, empty_n};
-      end
-      default: begin
-        {wptr, rptr}      <= {wptr, rptr};
-        {full_n, empty_n} <= {full_n, empty_n};
-      end
-    endcase
-  end
-end
+localparam SYS_STRB  = SYS_DW / 8;
+localparam LOC_VDW   = AW + SYS_DW + SYS_STRB + 1 + <%=targetid_width%>;
+localparam FB_VDW = VDW - SYS_AW - SYS_STRB - 1;
 
-`ifndef SYNTHESIS
-`ifdef FORMAL
-logic init = 1'b1;
-always @(posedge clk) begin
-  if (init) assume (~rstn);
-  init <= 1'b0;
-end
+logic [LOC_VDW-1:0]  req_pkt, tmp_tpkt_dat;
+logic [SYS_DW-1:0]   aligned_req_dat;
+logic [SYS_STRB-1:0] aligned_req_strb;
 
-// Validating FIFO's behaviors
-logic [AW:0] entry_cnt;
+assign aligned_req_strb = req_strb; 
+assign aligned_req_dat  = req_dat; 
 
-always @(posedge clk or negedge rstn) begin
-  if (~rstn) entry_cnt <= {(AW+1){1'b0}};
-  else begin
-    case ({we & full_n, re & empty_n})
-      2'b00, 2'b11: entry_cnt <= entry_cnt;
-      2'b01: entry_cnt <= entry_cnt - 1'b1;
-      2'b10: entry_cnt <= entry_cnt + 1'b1;
-      default: entry_cnt <= entry_cnt;
-    endcase
-  end
-end
+assign req_pkt = {tgtid, req_adr, req_wr, aligned_req_strb, aligned_req_dat};
 
-always @(posedge clk) begin
-  if (rstn) begin
-    assert (entry_cnt >= 0 && entry_cnt <= DEPTH); // Entry counter must not overflow/underflow
-    if (empty_n == 1'b0) assert (entry_cnt == 0);
-    if (full_n  == 1'b0) assert (entry_cnt == DEPTH);
-  end
-end
-`endif
-`endif
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+  ReqBuff (.clk (clk), .rstn (rstn),
+        .din    (req_pkt),      .we      (req_vld),
+        .dout   (tmp_tpkt_dat), .re      (tpkt_gnt),
+        .full_n (req_gnt),      .empty_n (tpkt_vld)
+);
+
+assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [(LOC_VDW-1) -: <%=targetid_width%>], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [SYS_DW + SYS_STRB + 1 + AW - 1 : 0]};
+
+<%=cmm_prefix%>XHndSk #(.D_WIDTH (SYS_DW))
+	RspHndSk (.clk (clk), .rstn (rstn),
+					  .vldi  (rpkt_vld), .rdyi (rpkt_gnt),
+						.vldo  (rsp_vld),  .rdyo (rsp_gnt),
+						.datai (rpkt_dat [SYS_DW-1:0]),
+						.datao (rsp_dat)
+);
+
+endmodule
+
+// Read-Writable Slave with bus width as same as system data bus
+module <%=cmm_prefix%>XSlvRWTrans #(parameter AW = 19, VDW = 74, SYS_AW = 32, SYS_DW = 32, OUTSTANDING_NUM = 2, ID = 0) (
+    input logic clk
+  , input logic rstn
+
+  , input  logic           tpkt_vld
+  , input  logic [VDW-1:0] tpkt_dat // {INITID, TGTID, LOAD = (S_ADR, WE, S_STRB, S_DATA) }
+  , output logic           tpkt_gnt
+
+  , output logic                  req_vld
+  , input  logic                  req_gnt
+	, output logic                  req_wr
+  , output logic [AW-1:0]         req_adr
+	, output logic [(SYS_DW/8)-1:0] req_strb
+  , output logic [SYS_DW-1:0]     req_dat
+
+  , input  logic               rsp_vld
+  , output logic               rsp_gnt
+  , input  logic [SYS_DW-1:0]  rsp_dat
+
+  , output logic                               rpkt_vld
+  , input  logic                               rpkt_gnt
+  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+);
+
+localparam SYS_STRB  = SYS_DW / 8;
+
+localparam LOC_VDW = AW + SYS_DW + <%=initid_width%> + 1 + SYS_DW/8;
+localparam FB_VDW = VDW - SYS_AW - SYS_STRB - 1;
+
+logic [LOC_VDW-1:0] req_pkt, tmp_req_attr;
+
+logic [SYS_DW-1:0]     tmp_req_dat;
+logic [(SYS_DW/8)-1:0] tmp_req_strb;
+
+logic [AW-1:0]     tmp_req_adr;
+logic              tmp_req_wr;
+
+assign tmp_req_adr  = tpkt_dat [(SYS_DW + SYS_STRB + 1) +: AW];
+assign tmp_req_dat  = tpkt_dat [SYS_DW-1:0];
+assign tmp_req_strb = tpkt_dat [SYS_DW + SYS_STRB - 1 : SYS_DW];
+assign tmp_req_wr   = tpkt_dat [SYS_DW + SYS_STRB];
+assign req_pkt = {tpkt_dat[(VDW-1) -: <%=initid_width%>], tmp_req_adr, tmp_req_wr, tmp_req_strb, tmp_req_dat};
+
+<%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+  ReqBuff (.clk (clk), .rstn (rstn),
+        .din    (req_pkt),     .we      (tpkt_vld),
+        .dout   (tmp_req_attr), .re      (req_gnt),
+        .full_n (tpkt_gnt),    .empty_n (req_vld)
+);
+
+assign {req_adr, req_wr, req_strb, req_dat} = tmp_req_attr [SYS_DW + SYS_STRB + 1 + AW - 1 : 0];
+
+logic [<%=initid_width-1%>:0] init_id;
+
+<%=cmm_prefix%>XFifo #(.DW(<%=initid_width%>), .DEPTH(OUTSTANDING_NUM))
+  IdBuff (.clk (clk), .rstn (rstn),
+        .din    (tmp_req_attr [(LOC_VDW-1) -: <%=initid_width%>]), .we (req_vld & req_gnt),
+        .dout   (init_id),                       .re (rsp_vld & rpkt_gnt),
+        .full_n (), .empty_n ()
+);
+
+logic [FB_VDW-1:0] tmp_rpkt_dat;
+
+assign tmp_rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], rsp_dat};
+
+<%=cmm_prefix%>XHndSk #(.D_WIDTH (FB_VDW))
+	RspHndSk (.clk (clk), .rstn (rstn),
+					  .vldi (rsp_vld),  .rdyi (rsp_gnt),
+						.vldo (rpkt_vld), .rdyo (rpkt_gnt),
+						.datai (tmp_rpkt_dat),
+						.datao (rpkt_dat)
+);
+
 endmodule
 // EOF

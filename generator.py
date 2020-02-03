@@ -55,11 +55,11 @@ if __name__ == "__main__":
 									agents           = cfg.agents,
 									address_map      = cfg.address_map,
 									agents_addrwidth = cfg.agents_addrwidth,
-									agents_datawidth = cfg.agents_addrwidth,
+									agents_datawidth = cfg.agents_datawidth,
 									outstanding_num  = cfg.outstanding_num,
 	                conn_matrix      = cfg.connection_matrix)
 
-	req_env ['pktwidth']       = req_env['datawidth'] + req_env['sidewidth'] + req_env['addrwidth']
+	req_env ['pktwidth']       = req_env['datawidth'] + req_env['sidewidth'] + req_env['addrwidth'] + 1 + (req_env['datawidth'] // 8)
 	req_env ['initid_width']   = math.ceil(math.log2(req_env['n_initiators']))
 	req_env ['targetid_width'] = math.ceil(math.log2(req_env['n_targets']))
 	req_env ['vdw']            = req_env ['pktwidth'] + req_env ['initid_width'] + req_env ['targetid_width']

@@ -7,5 +7,6 @@
 <%=cmm_prefix%>rsp_XMatrix.sv
 <%=cmm_prefix%>rsp_XRouter.sv
 <%=cmm_prefix%>XSwitch.sv
+<%=cmm_prefix%>XCommon.sv
 <%=cmm_prefix%>XPktTrans.sv
 <%=cmm_prefix%>XFabric.sv

@@ -1,0 +1,158 @@
+// HMTH (c)
+
+// Below FIFO must have DEPTH that is power of 2
+module <%=cmm_prefix%>XFifo #(parameter DW = 40, DEPTH = 2) (
+    input logic clk
+  , input logic rstn
+
+  , input  logic [DW-1:0] din
+  , input  logic          we
+
+  , output logic [DW-1:0] dout
+  , input  logic          re
+
+  , output logic          full_n
+  , output logic          empty_n
+);
+
+localparam AW = DEPTH > 1 ? $clog2(DEPTH) : 1;
+
+`ifndef SYNTHESIS
+	initial begin
+		assert (DEPTH[0] == 1'b0);
+	end
+`endif
+
+reg   [DW-1:0] mem [0:DEPTH-1];
+logic [AW-1:0] rptr, wptr;
+logic we_ok, re_ok;
+logic w_ovf, r_ovf;
+
+assign we_ok = we & full_n;
+assign re_ok = re & empty_n;
+
+assign dout = mem [rptr];
+
+always @(posedge clk) begin
+  if (we_ok) mem[wptr] <= din;
+end
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+  if (rstn == 1'b0) begin
+    {r_ovf, rptr}     <= {1'b0, {AW{1'b0}}};
+    {w_ovf, wptr}     <= {1'b0, {AW{1'b0}}};
+    {full_n, empty_n} <= {1'b1, 1'b0};
+  end else begin
+    case ({we_ok, re_ok})
+      2'b01: begin
+        wptr          <= wptr;
+        {r_ovf, rptr} <= rptr + 1'b1;
+        full_n        <= 1'b1;
+        empty_n       <= (rptr + 1'b1) == wptr ? 1'b0 : empty_n;
+      end
+      2'b10: begin
+        rptr <= rptr;
+        {w_ovf, wptr} <= wptr + 1'b1;
+        empty_n       <= 1'b1;
+        full_n        <= (wptr + 1'b1) == rptr ? 1'b0 : full_n;
+      end
+      2'b11: begin
+        {r_ovf, rptr} <= rptr + 1'b1;
+        {w_ovf, wptr} <= wptr + 1'b1;
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+      2'b00: begin
+        {wptr, rptr}      <= {wptr, rptr};
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+      default: begin
+        {wptr, rptr}      <= {wptr, rptr};
+        {full_n, empty_n} <= {full_n, empty_n};
+      end
+    endcase
+  end
+end
+
+`ifndef SYNTHESIS
+`ifdef FORMAL
+logic init = 1'b1;
+always @(posedge clk) begin
+  if (init) assume (~rstn);
+  init <= 1'b0;
+end
+
+// Validating FIFO's behaviors
+logic [AW:0] entry_cnt;
+
+always @(posedge clk or negedge rstn) begin
+  if (~rstn) entry_cnt <= {(AW+1){1'b0}};
+  else begin
+    case ({we & full_n, re & empty_n})
+      2'b00, 2'b11: entry_cnt <= entry_cnt;
+      2'b01: entry_cnt <= entry_cnt - 1'b1;
+      2'b10: entry_cnt <= entry_cnt + 1'b1;
+      default: entry_cnt <= entry_cnt;
+    endcase
+  end
+end
+
+always @(posedge clk) begin
+  if (rstn) begin
+    assert (entry_cnt >= 0 && entry_cnt <= DEPTH); // Entry counter must not overflow/underflow
+    if (empty_n == 1'b0) assert (entry_cnt == 0);
+    if (full_n  == 1'b0) assert (entry_cnt == DEPTH);
+  end
+end
+`endif
+`endif
+endmodule
+
+module <%=cmm_prefix%>XHndSk #(parameter D_WIDTH = 16)
+(
+  input  logic clk,
+  input  logic rstn,
+
+  input  logic vldi,
+  input  logic rdyo,
+  input  logic [D_WIDTH-1:0] datai,
+
+  output logic vldo,
+  output logic rdyi,
+  output logic [D_WIDTH-1:0] datao
+);
+
+  localparam IDLE = 1'b1;
+  localparam BUSY = 1'b0;
+
+  logic state, nxt_state;
+  logic nxt_vldo;
+  logic [D_WIDTH-1:0] nxt_datao;
+
+  assign nxt_state = !rdyo ? BUSY  : IDLE;
+  assign nxt_vldo  = !rdyo ? 1'b1  : vldi;
+  assign nxt_datao = !rdyo ? datao : datai;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+  if (rstn == 1'b0) begin
+		state <= IDLE;
+		vldo  <= 1'b0;
+		datao <= {(D_WIDTH){1'b0}};;
+	end else begin
+		state <= nxt_state;
+		vldo  <= nxt_vldo;
+		datao <= nxt_datao;
+	end
+end
+
+assign rdyi = state;
+
+endmodule
+// EOF
