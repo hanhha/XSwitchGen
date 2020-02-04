@@ -8,5 +8,7 @@
 <%=cmm_prefix%>rsp_XRouter.sv
 <%=cmm_prefix%>XSwitch.sv
 <%=cmm_prefix%>XCommon.sv
+<%=cmm_prefix%>XFifo.sv
+<%=cmm_prefix%>XAFifo.sv
 <%=cmm_prefix%>XPktTrans.sv
 <%=cmm_prefix%>XFabric.sv
