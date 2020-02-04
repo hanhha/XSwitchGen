@@ -44,4 +44,36 @@ end
 assign rdyi = state;
 
 endmodule
+
+// In below module, N is usually 2 or 3 (make sure to evaluate MTBF)
+module <%=cmm_prefix%>XSyncer #(parameter DW = 2, N = 2) (
+	input logic clk,
+	input logic rstn,
+
+	input  logic [DW-1:0] d,
+	output logic [DW-1:0] q
+);
+
+logic [DW-1:0] sync_ff [0:N-2];
+
+integer i;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+	if (~rstn) begin
+		for (i = 0; i < N-1; i++)
+			sync_ff [i] <= {DW{1'b0}};		
+		q <= {DW{1'b0}};
+	end else begin
+		sync_ff [0] <= d;
+		for (i = 1; i < N-1; i++)
+			sync_ff [i] <= sync_ff [i-1];
+		q <= sync_ff [N-2];
+	end
+end
+
+endmodule
 // EOF
