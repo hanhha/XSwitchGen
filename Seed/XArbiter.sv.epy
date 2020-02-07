@@ -22,7 +22,7 @@ assign I<%=i%>_req_avail = I<%=i%>_req & T_rdy;
 <%for j in range(0,n_targets):%>
 logic [<%=n_initiators-1%>:0] T<%=j%>_gnt, req_T<%=j%>;
 assign req_T<%=j%> = {<%=", ".join(["I" + str(i) + "_req_avail [" + str(j) + "]" for i in reversed(range(0,n_initiators))])%>};
-<%=prefix%>XArbiter_RR #(<%=n_initiators%>) T<%=j%>_RR (.clk (clk), .rstn (rstn), .req (req_T<%=j%>), .gnt (T<%=j%>_gnt));
+<%=cmm_prefix%>XArbiter_RR #(<%=n_initiators%>) T<%=j%>_RR (.clk (clk), .rstn (rstn), .req (req_T<%=j%>), .gnt (T<%=j%>_gnt));
 
 <%%>
 

@@ -67,7 +67,7 @@ always @(posedge clk) begin
   end else begin
     bin_cnt                        <= nxt_bin_cnt;
     a_g_wptr                       <= nxt_g_wptr;
-    full_n                         <= (nxt_g_wptr [AW] != synced_rptr [AW]) && (nxt_g_wptr [AW-1] == ~synced_rptr [AW-1]) && (nxt_g_wptr [AW-2:0] == synced_rptr [AW-2:0]) ? 1'b0 : 1'b1;
+    full_n                         <= (nxt_g_wptr [AW] != synced_g_rptr [AW]) && (nxt_g_wptr [AW-1] == ~synced_g_rptr [AW-1]) && (nxt_g_wptr [AW-2:0] == synced_g_rptr [AW-2:0]) ? 1'b0 : 1'b1;
   end
 end
 
@@ -111,7 +111,7 @@ always @(posedge clk) begin
   end else begin
     bin_cnt                        <= nxt_bin_cnt;
     a_g_rptr                       <= nxt_g_rptr;
-    empty_n                        <= synced_wptr == nxt_g_rptr ? 1'b0 : 1'b1;
+    empty_n                        <= synced_g_wptr == nxt_g_rptr ? 1'b0 : 1'b1;
   end
 end
 

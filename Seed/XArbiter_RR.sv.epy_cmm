@@ -1,7 +1,7 @@
 // HMTH (c)
 // Round-robin arbiter
 
-module <%=prefix%>XArbiter_RR #(parameter REQ_N = <%=n_initiators%>) (
+module <%=cmm_prefix%>XArbiter_RR #(parameter REQ_N = <%=n_initiators%>) (
     input logic clk
   , input logic rstn
 
@@ -12,16 +12,7 @@ module <%=prefix%>XArbiter_RR #(parameter REQ_N = <%=n_initiators%>) (
 logic [REQ_N-1:0] mask, nxt_mask;
 logic [REQ_N-1:0] masked_req;
 
-always @(*) begin
-<%for i in range(0,n_initiators):%>
-<%  if i == 0:%>
-  if      (gnt[<%=i%>]) nxt_mask = {{(REQ_N-<%=i+1%>){1'b1}}, <%=i+1%>'b0};
-<%  else:%>
-  else if (gnt[<%=i%>]) nxt_mask = {{(REQ_N-<%=i+1%>){1'b1}}, <%=i+1%>'b0};
-<%  %>
-<%%>
-  else nxt_mask = mask;
-end
+<%=cmm_prefix%>XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(1)) mask_gen (.i(gnt), .o(nxt_mask));
 
 `ifndef SELECT_SRSTn
 always @(posedge clk or negedge rstn) begin
@@ -29,7 +20,7 @@ always @(posedge clk or negedge rstn) begin
 always @(posedge clk) begin
 `endif
   if (~rstn) mask <= {REQ_N{1'b1}};
-  else       mask <= nxt_mask;
+  else       mask <= |gnt ? nxt_mask : mask;
 end
 
 assign masked_req = req & mask;
@@ -37,24 +28,10 @@ assign masked_req = req & mask;
 logic [REQ_N-1:0] pre_gnt, pos_gnt;
 
 // Before pivot
-always @(*) begin
-  case (1'b1)
-<%for i in range(0,n_initiators):%>
-    req [<%=i%>] : pre_gnt = <%=n_initiators%>'b1 << <%=i%>;
-<%%>
-    default : pre_gnt = <%=n_initiators%>'b0;
-  endcase
-end
+<%=cmm_prefix%>XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(0)) pre_gnt_gen (.i(req), .o(pre_gnt));
 
 // After pivot
-always @(*) begin
-  case (1'b1)
-<%for i in range(0,n_initiators):%>
-    masked_req [<%=i%>] : pos_gnt = <%=n_initiators%>'b1 << <%=i%>;
-<%%>
-    default        : pos_gnt = <%=n_initiators%>'b0;
-  endcase
-end
+<%=cmm_prefix%>XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(0)) pos_gnt_gen (.i(masked_req), .o(pos_gnt));
 
 assign gnt = |masked_req ? pos_gnt : pre_gnt;
 

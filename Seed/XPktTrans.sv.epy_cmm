@@ -149,7 +149,7 @@ localparam SYS_STRB  = SYS_DW / 8;
 			if (rstn)
 				if (tpkt_vld) begin
 					s_strb = tpkt_dat [SYS_DW +: SYS_STRB];
-					assert (<%=" + ".join(["s_strb [" + str(i) + "]" for i in range(datawidth//8)])%> <= (DW / 8));
+					assume (<%=" + ".join(["s_strb [" + str(i) + "]" for i in range(datawidth//8)])%> <= (DW / 8));
 				end
 		end
 		/* verilator lint_on WIDTH */

@@ -7,11 +7,12 @@ depth 100
 smtbmc boolector
 
 [script]
-read_verilog -sv -formal <%=cmm_prefix%>req_XMatrix.sv <%=cmm_prefix%>req_XArbiter_RR.sv <%=cmm_prefix%>req_XArbiter.sv <%=cmm_prefix%>req_XRouter.sv 
-read_verilog -sv -formal <%=cmm_prefix%>rsp_XMatrix.sv <%=cmm_prefix%>rsp_XArbiter_RR.sv <%=cmm_prefix%>rsp_XArbiter.sv <%=cmm_prefix%>rsp_XRouter.sv 
+read_verilog -sv -formal <%=cmm_prefix%>req_XMatrix.sv <%=cmm_prefix%>req_XArbiter.sv <%=cmm_prefix%>req_XRouter.sv 
+read_verilog -sv -formal <%=cmm_prefix%>rsp_XMatrix.sv <%=cmm_prefix%>rsp_XArbiter.sv <%=cmm_prefix%>rsp_XRouter.sv 
 read_verilog -sv -formal <%=cmm_prefix%>XSwitch.sv
 read_verilog -sv -formal <%=cmm_prefix%>XMem.sv
 read_verilog -sv -formal <%=cmm_prefix%>XCommon.sv
+read_verilog -sv -formal <%=cmm_prefix%>XArbiter_RR.sv
 read_verilog -sv -formal <%=cmm_prefix%>XFifo.sv
 read_verilog -sv -formal <%=cmm_prefix%>XAFifo.sv
 read_verilog -sv -formal <%=cmm_prefix%>XPktTrans.sv
@@ -20,16 +21,15 @@ prep -top <%=cmm_prefix%>XFabric
 
 [files]
 <%=cmm_prefix%>req_XMatrix.sv
-<%=cmm_prefix%>req_XArbiter_RR.sv
 <%=cmm_prefix%>req_XArbiter.sv
 <%=cmm_prefix%>req_XRouter.sv
 <%=cmm_prefix%>rsp_XMatrix.sv
-<%=cmm_prefix%>rsp_XArbiter_RR.sv
 <%=cmm_prefix%>rsp_XArbiter.sv
 <%=cmm_prefix%>rsp_XRouter.sv
 <%=cmm_prefix%>XSwitch.sv
 <%=cmm_prefix%>XMem.sv
 <%=cmm_prefix%>XCommon.sv
+<%=cmm_prefix%>XArbiter_RR.sv
 <%=cmm_prefix%>XFifo.sv
 <%=cmm_prefix%>XAFifo.sv
 <%=cmm_prefix%>XPktTrans.sv
