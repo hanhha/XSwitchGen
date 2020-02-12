@@ -11,5 +11,5 @@ read_verilog -sv -formal <%=cmm_prefix%>XMem.sv <%=cmm_prefix%>XFifo.sv
 prep -top <%=cmm_prefix%>XFifo
 
 [files]
-<%=cmm_prefix%>XMem.sv
-<%=cmm_prefix%>XFifo.sv
+../design/<%=cmm_prefix%>XMem.sv
+../design/<%=cmm_prefix%>XFifo.sv

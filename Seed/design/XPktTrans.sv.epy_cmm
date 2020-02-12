@@ -18,7 +18,7 @@ module <%=cmm_prefix%>XMstRWSTrans #(parameter AW = 19, DW = 8, VDW = 74, OUTSTA
 
   , input  logic                               rpkt_vld
   , output logic                               rpkt_gnt
-  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {TGTID, INITID, LOAD = (S_DATA) }
 
   , output logic           rsp_vld
   , input  logic           rsp_gnt
@@ -35,15 +35,7 @@ assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_m
 <%%>
 /* verilator lint_on WIDTH */
 
-always @(*) begin
-  // unique_case
-  case (1'b1)
-<%for i in range(n_targets):%>
-    T<%=i%>_hit: tgtid = <%=targetid_width%>'d<%=i%>;
-<%%>
-    default: tgtid = <%=targetid_width%>'d0;
-  endcase
-end
+assign tgtid = <%=" | ".join(["{" + str(targetid_width) + "{T" + str(i) + "_hit}} & " + str(targetid_width) + "'d" + str(i) for i in range(n_targets)])%>;
 
 localparam HIDX = $clog2 (SYS_DW / 8) - 1;
 localparam LIDX = $clog2 (DW / 8);
@@ -71,23 +63,40 @@ end
 
 assign req_pkt = {tgtid, req_adr, req_wr, aligned_req_strb, aligned_req_dat};
 
+logic [HIDX - LIDX : 0] rpkt_dat_idx;
+logic wait_rsp;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+	if (rstn == 1'b0) begin
+		wait_rsp <= 1'b0;
+	end else begin
+		if (tpkt_vld & tpkt_gnt) begin
+			wait_rsp <= 1'b1;
+			rpkt_dat_idx <= tpkt_dat [(SYS_DW + SYS_STRB + 1 + LIDX) +: (HIDX - LIDX + 1)];
+		end else if (rsp_vld & rsp_gnt)
+			wait_rsp <= 1'b0;
+		else
+			wait_rsp <= wait_rsp;
+	end
+end
+
+logic tmp_tpkt_vld, tmp_tpkt_gnt;
+
+assign tmp_tpkt_gnt = tpkt_gnt & ~wait_rsp;
+assign tpkt_vld     = tmp_tpkt_vld & ~wait_rsp;
+
 <%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
   ReqBuff (.clk (clk), .rstn (rstn),
         .din    (req_pkt),      .we      (req_vld),
-        .dout   (tmp_tpkt_dat), .re      (tpkt_gnt),
-        .full_n (req_gnt),      .empty_n (tpkt_vld)
+        .dout   (tmp_tpkt_dat), .re      (tmp_tpkt_gnt),
+        .full_n (req_gnt),      .empty_n (tmp_tpkt_vld)
 );
 
 assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [(LOC_VDW-1) -: <%=targetid_width%>], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [SYS_DW + SYS_STRB + 1 + AW - 1 : 0]};
-
-logic [HIDX - LIDX : 0] rpkt_dat_idx;
-
-<%=cmm_prefix%>XFifo #(.DW(HIDX - LIDX + 1), .DEPTH(OUTSTANDING_NUM))
-	ReqAdrBuff (.clk (clk), .rstn (rstn),
-							.din (tpkt_dat [(SYS_DW + SYS_STRB + 1 + LIDX) +: (HIDX - LIDX + 1)]), .we (tpkt_vld & tpkt_gnt),
-							.dout (rpkt_dat_idx), .re (rpkt_vld & rpkt_gnt),
-							.full_n (), .empty_n ()
-);
 
 <%=cmm_prefix%>XHndSk #(.D_WIDTH (DW))
 	RspHndSk (.clk (clk), .rstn (rstn),
@@ -135,7 +144,7 @@ module <%=cmm_prefix%>XSlvRWSTrans #(parameter AW = 19, DW = 8, VDW = 74, SYS_AW
 
   , output logic                               rpkt_vld
   , input  logic                               rpkt_gnt
-  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {TGTID, INITID, LOAD = (S_DATA) }
 );
 
 localparam SYS_STRB  = SYS_DW / 8;
@@ -218,7 +227,7 @@ always @(*) begin
 /* verilator lint_on WIDTH */
 end
 
-assign tmp_rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], rsp_sys_dat};
+assign tmp_rpkt_dat = {ID [<%=targetid_width-1%>:0], init_id, rsp_sys_dat};
 
 <%=cmm_prefix%>XHndSk #(.D_WIDTH (FB_VDW))
 	RspHndSk (.clk (clk), .rstn (rstn),
@@ -248,7 +257,7 @@ module <%=cmm_prefix%>XMstRWTrans #(parameter AW = 19, VDW = 74, OUTSTANDING_NUM
 
   , input  logic                               rpkt_vld
   , output logic                               rpkt_gnt
-  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+  , input  logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {TGTID, INITID, LOAD = (S_DATA) }
 
   , output logic               rsp_vld
   , input  logic               rsp_gnt
@@ -265,15 +274,7 @@ assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_m
 <%%>
 /* verilator lint_on WIDTH */
 
-always @(*) begin
-  // unique_case
-  case (1'b1)
-<%for i in range(n_targets):%>
-    T<%=i%>_hit: tgtid = <%=targetid_width%>'d<%=i%>;
-<%%>
-    default: tgtid = <%=targetid_width%>'d0;
-  endcase
-end
+assign tgtid = <%=" | ".join(["{" + str(targetid_width) + "{T" + str(i) + "_hit}} & " + str(targetid_width) + "'d" + str(i) for i in range(n_targets)])%>;
 
 localparam SYS_STRB  = SYS_DW / 8;
 localparam LOC_VDW   = AW + SYS_DW + SYS_STRB + 1 + <%=targetid_width%>;
@@ -288,11 +289,35 @@ assign aligned_req_dat  = req_dat;
 
 assign req_pkt = {tgtid, req_adr, req_wr, aligned_req_strb, aligned_req_dat};
 
+logic wait_rsp;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+	if (rstn == 1'b0) begin
+		wait_rsp <= 1'b0;
+	end else begin
+		if (tpkt_vld & tpkt_gnt)
+			wait_rsp <= 1'b1;
+		else if (rsp_vld & rsp_gnt)
+			wait_rsp <= 1'b0;
+		else
+			wait_rsp <= wait_rsp;
+	end
+end
+
+logic tmp_tpkt_vld, tmp_tpkt_gnt;
+
+assign tmp_tpkt_gnt = tpkt_gnt & ~wait_rsp;
+assign tpkt_vld     = tmp_tpkt_vld & ~wait_rsp;
+
 <%=cmm_prefix%>XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
   ReqBuff (.clk (clk), .rstn (rstn),
         .din    (req_pkt),      .we      (req_vld),
-        .dout   (tmp_tpkt_dat), .re      (tpkt_gnt),
-        .full_n (req_gnt),      .empty_n (tpkt_vld)
+        .dout   (tmp_tpkt_dat), .re      (tmp_tpkt_gnt),
+        .full_n (req_gnt),      .empty_n (tmp_tpkt_vld)
 );
 
 assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [(LOC_VDW-1) -: <%=targetid_width%>], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [SYS_DW + SYS_STRB + 1 + AW - 1 : 0]};
@@ -329,7 +354,7 @@ module <%=cmm_prefix%>XSlvRWTrans #(parameter AW = 19, VDW = 74, SYS_AW = 32, SY
 
   , output logic                               rpkt_vld
   , input  logic                               rpkt_gnt
-  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {INITID, TGTID, LOAD = (S_DATA) }
+  , output logic [VDW-SYS_AW-(SYS_DW/8)-1-1:0] rpkt_dat // {TGTID, INITID, LOAD = (S_DATA) }
 );
 
 localparam SYS_STRB  = SYS_DW / 8;
@@ -371,7 +396,7 @@ logic [<%=initid_width-1%>:0] init_id;
 
 logic [FB_VDW-1:0] tmp_rpkt_dat;
 
-assign tmp_rpkt_dat = {init_id, ID [<%=targetid_width-1%>:0], rsp_dat};
+assign tmp_rpkt_dat = {ID [<%=targetid_width-1%>:0], init_id, rsp_dat};
 
 <%=cmm_prefix%>XHndSk #(.D_WIDTH (FB_VDW))
 	RspHndSk (.clk (clk), .rstn (rstn),

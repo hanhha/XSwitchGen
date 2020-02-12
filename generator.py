@@ -14,27 +14,26 @@ class XRouterGen (object):
 		self.seed = "Seed"
 
 	def gen_files (self):
-		for filename in glob.glob(self.seed + '/*.epy'):
-			with open (filename,"r") as sf:
-				epython = epy.ePython (sf.read())
-			basename = self.env['prefix'] + os.path.basename (filename)
-			with open (self.env['gendir'] + "/" + os.path.splitext(basename)[0], "w") as f:
-				f.write (epython.render (self.env))
+		self.gen ('prefix', '/design/*.epy', 'design')
+		self.gen ('prefix', '/verif/*.epy', 'verif')
+		self.gen ('prefix', '/scripts/*.epy', 'scripts')
 
 	def gen_cmm_files (self):
-		for filename in glob.glob(self.seed + '/*.epy_cmm'):
-			with open (filename,"r") as sf:
-				epython = epy.ePython (sf.read())
-			basename = self.env['cmm_prefix'] + os.path.basename (filename)
-			with open (self.env['gendir'] + "/" + os.path.splitext(basename)[0], "w") as f:
-				f.write (epython.render (self.env))
+		self.gen ('cmm_prefix', '/design/*.epy_cmm', 'design')
+		self.gen ('cmm_prefix', '/verif/*.epy_cmm', 'verif')
+		self.gen ('cmm_prefix', '/scripts/*.epy_cmm', 'scripts')
 
 	def gen_uq_files (self):
-		for filename in glob.glob(self.seed + '/*.epy_uq'):
+		self.gen ('', '/design/*.epy_uq', 'design')
+		self.gen ('', '/verif/*.epy_uq', 'verif')
+		self.gen ('', '/scripts/*.epy_uq', 'scripts')
+
+	def gen (self, basename_string, file_search_string, dir_string):
+		for filename in glob.glob(self.seed + file_search_string):
 			with open (filename,"r") as sf:
 				epython = epy.ePython (sf.read())
-			basename = os.path.basename (filename)
-			with open (self.env['gendir'] + "/" + os.path.splitext(basename)[0], "w") as f:
+			basename = self.env[basename_string] + os.path.basename (filename) if basename_string is not "" else os.path.basename (filename)
+			with open (self.env['gendir'] + "/" + dir_string + "/" + os.path.splitext(basename)[0], "w") as f:
 				f.write (epython.render (self.env))
 
 if __name__ == "__main__":
@@ -86,6 +85,9 @@ if __name__ == "__main__":
 	print ("RTL will be generated in \"%s\" folder." %(gendir))
 	shutil.rmtree (gendir, ignore_errors = True)
 	os.makedirs   (gendir, exist_ok = True)
+	os.makedirs   (gendir + "/design"  , exist_ok = True)
+	os.makedirs   (gendir + "/verif"   , exist_ok = True)
+	os.makedirs   (gendir + "/scripts" , exist_ok = True)
 
 	req_gen.gen_files ()
 	req_gen.gen_cmm_files ()

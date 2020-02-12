@@ -21,9 +21,12 @@ module <%=cmm_prefix%>XHndSk #(parameter D_WIDTH = 16)
   logic nxt_vldo;
   logic [D_WIDTH-1:0] nxt_datao;
 
-  assign nxt_state = !rdyo ? BUSY  : IDLE;
-  assign nxt_vldo  = !rdyo ? 1'b1  : vldi;
-  assign nxt_datao = !rdyo ? datao : datai;
+  assign nxt_state = rdyo ? IDLE : 
+                            vldi ? BUSY : state;
+  assign nxt_vldo  = state == IDLE ? vldi :
+                                     rdyo ? vldi : vldo;
+  assign nxt_datao = state == IDLE ? datai :
+                                     rdyo ? datai : datao;
 
 `ifndef SELECT_SRSTn
 always @(posedge clk or negedge rstn) begin

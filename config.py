@@ -1,4 +1,4 @@
-prefix            = "N2T"
+prefix            = ""
 n_initiators      = 3
 n_targets         = 5
 addrwidth         = 24 # System address width
@@ -43,7 +43,7 @@ agents_addrwidth = {'I0' : 24,
 							      'T1' : 16,
 							 		  'T2' : 16,
 					    			'T3' : 21,
-										'T4' : 14}
+										'T4' : 15}
 
 agents_datawidth = {'I0' : 32,
 							      'I1' : 32,

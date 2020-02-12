@@ -1,0 +1,20 @@
+#include <V<%=cmm_prefix%>XFabricCover.h>
+#include "testbench.h"
+
+int main (int argc, char **argv) {
+  Verilated::commandArgs(argc, argv);
+  TESTBENCH<V<%=cmm_prefix%>XFabricCover> *tb = new TESTBENCH<V<%=cmm_prefix%>XFabricCover>();
+
+  tb->opentrace("trace.vcd");
+
+	// Initial values
+	// TODO: initialize signals here
+	tb->reset ();
+	
+	// TODO: add code to verify 
+	tb->tick ();
+
+	// TODO: add code to verify 
+	tb->close ();
+	exit (EXIT_SUCCESS);
+}

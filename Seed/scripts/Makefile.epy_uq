@@ -1,10 +1,23 @@
 TOP=<%=cmm_prefix%>XFabric
+TB_TOP=<%=cmm_prefix%>XFabricCover
+VERILATOR_WNO=-Wno-LITENDIAN -Wno-style
+DESIGN_DIR=../design
+VERIF_DIR=../verif
 
 all: help
 
 .PHONY: lint
 lint: ##@Lint Run lint using Verilator
-	verilator -F filelist.f --top-module ${TOP} --lint-only
+	verilator -F ${DESIGN_DIR}/filelist.f --top-module ${TOP} --lint-only
+
+.PHONY: verilator 
+verilator: ##@Verification Compile design and test environment 
+	verilator -Wall --trace --cc ${VERILATOR_WNO} -F ${DESIGN_DIR}/filelist.f ${VERIF_DIR}/<%=cmm_prefix%>tb.sv --top-module ${TB_TOP} --exe ${VERIF_DIR}/test.cpp
+	make -C obj_dir/ -f V${TB_TOP}.mk V${TB_TOP}
+
+.PHONY: sim 
+sim: verilator ##@Simulation Simulate design
+	lldb -o 'run' -o 'quit' obj_dir/V${TB_TOP}
 
 .PHONY: formal
 formal: formal_clean ##@Verification Run formal verification using SymbiYosys
@@ -14,8 +27,12 @@ formal: formal_clean ##@Verification Run formal verification using SymbiYosys
 formal_clean:
 	rm -rf ${TOP}
 
+.PHONY: sim_clean
+sim_clean:
+	rm -rf obj_dir
+
 .PHONY: clean
-clean: formal_clean
+clean: formal_clean sim_clean
 
 HELP_FUN = \
          %help; \

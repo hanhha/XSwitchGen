@@ -9,5 +9,6 @@
 <%=cmm_prefix%>XArbiter_RR.sv
 <%=cmm_prefix%>XFifo.sv
 <%=cmm_prefix%>XAFifo.sv
+<%=cmm_prefix%>XMem.sv
 <%=cmm_prefix%>XPktTrans.sv
 <%=cmm_prefix%>XFabric.sv
