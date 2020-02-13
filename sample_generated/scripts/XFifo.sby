@@ -1,0 +1,15 @@
+[options]
+mode bmc
+depth 100
+
+[engines]
+#abc bmc3
+smtbmc boolector
+
+[script]
+read_verilog -sv -formal XMem.sv XFifo.sv
+prep -top XFifo
+
+[files]
+../design/XMem.sv
+../design/XFifo.sv

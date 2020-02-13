@@ -50,11 +50,13 @@ module <%=cmm_prefix%>DummyTarget #(parameter AW = 24, DW = 16, DMMY_AW = 2) (
   input  logic              rsp_gnt,
   output logic [DW-1:0]     rsp_dat
 );
+localparam LW_IDX = $clog2(DW/8);
+localparam UW_IDX = (DMMY_AW - 1) < LW_IDX ? LW_IDX : DMMY_AW - 1;
 
-logic [DW-1:0] mem [0:(1 << DMMY_AW)-1];
+logic [DW-1:0] mem [0 : (1 << (UW_IDX - LW_IDX + 1))-1];
 logic state;
 
-logic [DMMY_AW-1:0] cur_adr;
+logic [UW_IDX:LW_IDX] cur_adr;
 
 assign rsp_dat = mem [cur_adr];
 
@@ -69,18 +71,20 @@ always @(posedge clk) begin
     req_gnt <= 1'b1;
     rsp_vld <= 1'b0;
 
-    cur_adr <= {DMMY_AW{1'b0}};
+    cur_adr <= {(UW_IDX-LW_IDX+1){1'b0}};
   end else begin
-    state <= req_vld & req_gnt ? 1'b1 : state;
-
     case (state)
       1'b0 : begin
-              req_gnt  <= req_vld ? 1'b0 : req_gnt;
-              rsp_vld  <= req_vld ? 1'b1 : rsp_vld;
+              state   <= req_vld & req_gnt ? 1'b1 : state;
 
-              cur_adr <= req_vld ? req_adr [DMMY_AW-1:0] : cur_adr;
+              req_gnt <= req_vld ? 1'b0 : req_gnt;
+              rsp_vld <= req_vld ? 1'b1 : rsp_vld;
+
+              cur_adr <= req_vld ? req_adr [UW_IDX:LW_IDX] : cur_adr;
              end
       1'b1 : begin
+              state   <= rsp_gnt ? 1'b0 : state;
+
               req_gnt <= rsp_gnt ? 1'b1 : req_gnt;
               rsp_vld <= rsp_gnt ? 1'b0 : rsp_vld;
              end
@@ -93,7 +97,7 @@ always @(posedge clk)
   if (req_vld & req_gnt & req_wr)
     for (i = 0; i < DW/8; i++) begin
       if (req_strb [i])
-        mem [req_adr[DMMY_AW-1:0]][(i*8)+:8] <= req_dat [(i*8)+:8];
+        mem [req_adr[UW_IDX:LW_IDX]][(i*8)+:8] <= req_dat [(i*8)+:8];
     end
 
 endmodule

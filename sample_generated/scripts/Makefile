@@ -1,0 +1,48 @@
+TOP=XFabric
+TB_TOP=XFabricCover
+VERILATOR_WNO=-Wno-LITENDIAN -Wno-style
+DESIGN_DIR=../design
+VERIF_DIR=../verif
+
+all: help
+
+.PHONY: lint
+lint: ##@Lint Run lint using Verilator
+	verilator -F ${DESIGN_DIR}/filelist.f --top-module ${TOP} --lint-only
+
+.PHONY: verilator 
+verilator: ##@Verification Compile design and test environment 
+	verilator -Wall --trace --cc ${VERILATOR_WNO} -F ${DESIGN_DIR}/filelist.f ${VERIF_DIR}/tb.sv --top-module ${TB_TOP} --exe ${VERIF_DIR}/test.cpp
+	make -C obj_dir/ -f V${TB_TOP}.mk V${TB_TOP}
+
+.PHONY: sim 
+sim: verilator ##@Simulation Simulate design
+	lldb -o 'run' -o 'quit' obj_dir/V${TB_TOP}
+
+.PHONY: formal
+formal: formal_clean ##@Verification Run formal verification using SymbiYosys
+	sby ${TOP}.sby
+
+.PHONY: formal_clean
+formal_clean:
+	rm -rf ${TOP}
+
+.PHONY: sim_clean
+sim_clean:
+	rm -rf obj_dir
+
+.PHONY: clean
+clean: formal_clean sim_clean
+
+HELP_FUN = \
+         %help; \
+         while(<>) { push @{$$help{$$2 // 'options'}}, [$$1, $$3] if /^(\w+)\s*:.*\#\#(?:@(\w+))?\s(.*)$$/ }; \
+         print "Usage: make [target]\n\n"; \
+     for (keys %help) { \
+         print "$$_:\n"; $$sep = " " x (20 - length $$_->[0]); \
+         print "  $$_->[0]$$sep$$_->[1]\n" for @{$$help{$$_}}; \
+         print "\n"; }
+
+.PHONY: help
+help: ##@Misc Show this help message.
+	@perl -e '${HELP_FUN}' ${MAKEFILE_LIST}

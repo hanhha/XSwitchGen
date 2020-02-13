@@ -1,0 +1,36 @@
+[options]
+mode bmc
+depth 100
+
+[engines]
+#abc bmc3
+smtbmc boolector
+
+[script]
+read_verilog -sv -formal req_XMatrix.sv req_XArbiter.sv req_XRouter.sv 
+read_verilog -sv -formal rsp_XMatrix.sv rsp_XArbiter.sv rsp_XRouter.sv 
+read_verilog -sv -formal XSwitch.sv
+read_verilog -sv -formal XMem.sv
+read_verilog -sv -formal XCommon.sv
+read_verilog -sv -formal XArbiter_RR.sv
+read_verilog -sv -formal XFifo.sv
+read_verilog -sv -formal XAFifo.sv
+read_verilog -sv -formal XPktTrans.sv
+read_verilog -sv -formal XFabric.sv
+prep -top XFabric
+
+[files]
+../design/req_XMatrix.sv
+../design/req_XArbiter.sv
+../design/req_XRouter.sv
+../design/rsp_XMatrix.sv
+../design/rsp_XArbiter.sv
+../design/rsp_XRouter.sv
+../design/XSwitch.sv
+../design/XMem.sv
+../design/XCommon.sv
+../design/XArbiter_RR.sv
+../design/XFifo.sv
+../design/XAFifo.sv
+../design/XPktTrans.sv
+../design/XFabric.sv
