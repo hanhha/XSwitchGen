@@ -34,27 +34,108 @@ always @(posedge clk or negedge rstn) begin
 always @(posedge clk) begin
 `endif
   if (rstn == 1'b0) begin
-		state <= IDLE;
-		vldo  <= 1'b0;
-		datao <= {(D_WIDTH){1'b0}};;
-	end else begin
-		state <= nxt_state;
-		vldo  <= nxt_vldo;
-		datao <= nxt_datao;
-	end
+    state <= IDLE;
+    vldo  <= 1'b0;
+    datao <= {(D_WIDTH){1'b0}};
+  end else begin
+    state <= nxt_state;
+    vldo  <= nxt_vldo;
+    datao <= nxt_datao;
+  end
 end
 
-assign rdyi = state;
+assign rdyi = rdyo;
 
+endmodule
+
+module <%=cmm_prefix%>XRegSlice #(parameter D_WIDTH = 16)
+(
+  input  logic clk,
+  input  logic rstn,
+
+  input  logic vldi,
+  input  logic rdyo,
+  input  logic [D_WIDTH-1:0] datai,
+
+  output logic vldo,
+  output logic rdyi,
+  output logic [D_WIDTH-1:0] datao
+);
+
+  localparam IDLE  = 2'b01;
+  localparam BUSY0 = 2'b00;
+  localparam BUSY1 = 2'b10;
+
+  logic [1:0] state, nxt_state;
+  logic nxt_vldo;
+  logic [D_WIDTH-1:0] nxt_datao, saved_data;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+  if (rstn == 1'b0) begin
+    state <= BUSY0;
+    vldo  <= 1'b0;
+  end else begin
+    case (state):
+      IDLE:  begin
+               state <= rdyo ? IDLE
+                             : vldi & vldo ? BUSY1
+                                           : vldi ? BUSY0 : state;
+               vldo  <= vldi;
+               datao <= rdyo ? datai
+                             : ~vldi & vldo ? datai : datao;
+               saved_data <= ~rdyo & vldo ? datai : saved_data;
+             end
+      BUSY0: begin
+               state <= rdyo ? IDLE : state;
+               vldo  <= rdyo ? 1'b0 : vldo;
+             end
+      BUSY1: begin
+							 state <= rdyo ? BUSY0 : state;
+							 datao <= rdyo ? saved_data : datao;
+             end
+      default: begin
+                 state      <= 2'bX;
+                 vldo       <= 1'bX;
+                 datao      <= {(D_WIDTH){1'bx}};
+                 saved_data <= {(D_WIDTH){1'bx}};
+               end
+    endcase
+  end
+end
+
+assign rdyi = state [0];
+
+`ifndef SYNTHESIS
+  `ifndef RICHMAN
+logic init = 1'b1;
+always @(posedge clk) begin
+  if (init) assume (~rstn);
+  init <= 1'b0;
+end
+
+// Validating register slice behavior 
+always @(posedge clk) begin
+  if (rstn) begin
+    if ($past(vldi) & $past(rdyo)) assert (vldo & (datao == $past(datai))); // After 1 cycle, data must arrive output port
+  end
+end
+  `else
+		ast_delay_1cyc: assert property (@(posedge clk) disable iff (!rstn) vldi & rdyo |=> vldo & (datao = $past(datai)));
+	`endif
+`endif
 endmodule
 
 // In below module, N is usually 2 or 3 (make sure to evaluate MTBF)
 module <%=cmm_prefix%>XSyncer #(parameter DW = 2, N = 2) (
-	input logic clk,
-	input logic rstn,
+  input logic clk,
+  input logic rstn,
 
-	input  logic [DW-1:0] d,
-	output logic [DW-1:0] q
+  input  logic [DW-1:0] d,
+  output logic [DW-1:0] q
 );
 
 logic [DW-1:0] sync_ff [0:N-2];
@@ -66,16 +147,16 @@ always @(posedge clk or negedge rstn) begin
 `else
 always @(posedge clk) begin
 `endif
-	if (~rstn) begin
-		for (i = 0; i < N-1; i++)
-			sync_ff [i] <= {DW{1'b0}};		
-		q <= {DW{1'b0}};
-	end else begin
-		sync_ff [0] <= d;
-		for (i = 1; i < N-1; i++)
-			sync_ff [i] <= sync_ff [i-1];
-		q <= sync_ff [N-2];
-	end
+  if (~rstn) begin
+    for (i = 0; i < N-1; i++)
+      sync_ff [i] <= {DW{1'b0}};    
+    q <= {DW{1'b0}};
+  end else begin
+    sync_ff [0] <= d;
+    for (i = 1; i < N-1; i++)
+      sync_ff [i] <= sync_ff [i-1];
+    q <= sync_ff [N-2];
+  end
 end
 
 endmodule
