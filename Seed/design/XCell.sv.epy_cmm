@@ -1,94 +1,114 @@
 // HMTH (c)
+// This is reduced version of XRouter with 5x5 unfully-connected grid
+// Its latency is expected to be 1 cycle
 
-module <%=cmm_prefix%>XCell #(parameter PLD_W = 8, DELT_W = 3) (
-    input logic clk
-	, input logic rstn
+module <%=cmm_prefix%>XCell #(parameter PLD_W = 8, X_DIM_W = 3, Y_DIM_W = 3, X_COOR = 0, Y_COOR = 0) (
+    input  logic clk
+	, input  logic rstn
+	, input  logic bound_check_en // enable to check delta values vs boundary or not
+	, output logic fault          // in case of receiving invalid delta x and y values
+
 <%for dir in ("N", "S", "E", "W"):%>
-  , input  logic                     <%=dir%>_vld_i
-  , output logic                     <%=dir%>_gnt_i
-	, input  logic signed [DELT_W-1:0] <%=dir%>_deltx_i
-	, input  logic signed [DELT_W-1:0] <%=dir%>_delty_i
-  , input  logic        [PLD_W-1:0]  <%=dir%>_pkt_i
+  , input  logic               <%=dir%>_vld_i
+  , output logic               <%=dir%>_gnt_i
+	, input  logic [X_DIM_W-1:0] <%=dir%>_destx_i
+	, input  logic [Y_DIM_W-1:0] <%=dir%>_desty_i
+  , input  logic [PLD_W-1:0]   <%=dir%>_pkt_i
 
-  , output logic                     <%=dir%>_vld_o
-  , input  logic                     <%=dir%>_gnt_o
-	, output logic                     <%=dir%>_dest_o
-	, output logic signed [DELT_W-1:0] <%=dir%>_deltx_o
-	, output logic signed [DELT_W-1:0] <%=dir%>_delty_o
-  , output logic        [PLD_W-1:0]  <%=dir%>_pkt_o
+  , output logic               <%=dir%>_vld_o
+  , input  logic               <%=dir%>_gnt_o
+	, output logic               <%=dir%>_dest_o
+	, output logic [X_DIM_W-1:0] <%=dir%>_destx_o
+	, output logic [Y_DIM_W-1:0] <%=dir%>_desty_o
+  , output logic [PLD_W-1:0]   <%=dir%>_pkt_o
 
 <%%>
 
-  , input  logic                     vld_i
-  , output logic                     gnt_i
-	, input  logic                     dest_i
-	, input  logic signed [DELT_W-1:0] deltx_i
-	, input  logic signed [DELT_W-1:0] delty_i
-  , input  logic        [PLD_W-1:0]  pkt_i
+  , input  logic               vld_i
+  , output logic               gnt_i
+	, input  logic               dest_i
+	, input  logic [X_DIM_W-1:0] destx_i
+	, input  logic [Y_DIM_W-1:0] desty_i
+  , input  logic [PLD_W-1:0]   pkt_i
 
-  , output logic                     vld_o
-  , input  logic                     gnt_o
-	, output logic                     dest_o
-  , output logic [PLD_W-1:0]         pkt_o
+  , output logic               vld_o
+  , input  logic               gnt_o
+	, output logic               dest_o
+  , output logic [PLD_W-1:0]   pkt_o
 );
-<%for dir in ("N", "S", "E", "W"):%>
-  logic                     imm_<%=dir%>_vld_i;
-  logic                     imm_<%=dir%>_gnt_i;
-	logic signed [DELT_W-1:0] imm_<%=dir%>_deltx_i;
-	logic signed [DELT_W-1:0] imm_<%=dir%>_delty_i;
-  logic        [PLD_W-1:0]  imm_<%=dir%>_pkt_i;
 
-  logic                     imm_<%=dir%>_vld_o;
-  logic                     imm_<%=dir%>_gnt_o;
-	logic                     imm_<%=dir%>_dest_o;
-	logic signed [DELT_W-1:0] imm_<%=dir%>_deltx_o;
-	logic signed [DELT_W-1:0] imm_<%=dir%>_delty_o;
-  logic        [PLD_W-1:0]  imm_<%=dir%>_pkt_o;
+// Regs at outbound ports
+<%for dir in ("N", "S", "E", "W"):%>
+  logic               imm_<%=dir%>_vld_o;
+  logic               imm_<%=dir%>_gnt_o;
+	logic               imm_<%=dir%>_dest_o;
+	logic [X_DIM_W-1:0] imm_<%=dir%>_destx_o;
+	logic [Y_DIM_W-1:0] imm_<%=dir%>_desty_o;
+  logic [PLD_W-1:0]   imm_<%=dir%>_pkt_o;
 <%%>
 
-  logic                     imm_vld_i;
-  logic                     imm_gnt_i;
-	logic                     imm_dest_i;
-	logic signed [DELT_W-1:0] imm_deltx_i;
-	logic signed [DELT_W-1:0] imm_delty_i;
-  logic        [PLD_W-1:0]  imm_pkt_i;
+  logic              imm_vld_o;
+  logic              imm_gnt_o;
+	logic              imm_dest_o;
+  logic [PLD_W-1:0]  imm_pkt_o;
 
-  logic                     imm_vld_o;
-  logic                     imm_gnt_o;
-	logic                     imm_dest_o;
-  logic        [PLD_W-1:0]  imm_pkt_o;
-
-// Regs at inbound and outbound ports
 <%for dir in ("N", "S", "E", "W"):%>
-<%=cmm_prefix%>XHndShk #(PLD_W + DELT_W + DELT_W) Reg_<%=dir%>_i
-                                             (.clk(clk), .rstn(rstn),
-                                              .vldi(<%=dir%>_vld_i), .rdyi(<%=dir%>_gnt_i),
-																							.datai({<%=dir%>_deltx_i, <%=dir%>_delty_i, <%=dir%>_pkt_i}),
-																							.datao({imm_<%=dir%>_deltx_i, imm_<%=dir%>_delty_i, imm_<%=dir%>_pkt_i}),
-																							.vldo(imm_<%=dir%>vld_i), .rdyo(imm_<%=dir%>_gnt_i));
-
-<%=cmm_prefix%>XHndShk #(PLD_W + DELT_W + DELT_W) Reg_<%=dir%>_o
+<%=cmm_prefix%>XRegSlice #(PLD_W + DELT_W + DELT_W) Reg_<%=dir%>_o
                                              (.clk(clk), .rstn(rstn),
                                               .vldi(imm_<%=dir%>_vld_o), .rdyi(imm_<%=dir%>_gnt_o),
-																							.datai({imm_<%=dir%>_deltx_o, imm_<%=dir%>_delty_o, imm_<%=dir%>_pkt_o}),
-																							.datao({<%=dir%>_deltx_o, <%=dir%>_delty_o, <%=dir%>_pkt_o}),
+																							.datai({imm_<%=dir%>_destx_o, imm_<%=dir%>_desty_o, imm_<%=dir%>_pkt_o}),
+																							.datao({<%=dir%>_destx_o, <%=dir%>_desty_o, <%=dir%>_pkt_o}),
 																							.vldo(<%=dir%>vld_o), .rdyo(<%=dir%>_gnt_o));
 
 <%%>
 
-<%=cmm_prefix%>XHndShk #(PLD_W + DELT_W + DELT_W) Reg_i
-                                             (.clk(clk), .rstn(rstn),
-                                              .vldi(vld_i), .rdyi(gnt_i),
-																							.datai({deltx_i, delty_i, pkt_i}),
-																							.datao({imm_deltx_i, imm_delty_i, imm_pkt_i}),
-																							.vldo(imm_vld_i), .rdyo(imm_gnt_i));
-
-<%=cmm_prefix%>XHndShk #(PLD_W + DELT_W + DELT_W) Reg_o
+<%=cmm_prefix%>XRegSlice #(PLD_W + DELT_W + DELT_W) Reg_o
                                              (.clk(clk), .rstn(rstn),
                                               .vldi(imm_<%=dir%>_vld_o), .rdyi(imm_<%=dir%>_gnt_o),
-																							.datai({imm_<%=dir%>_deltx_o, imm_<%=dir%>_delty_o, imm_<%=dir%>_pkt_o}),
-																							.datao({<%=dir%>_deltx_o, <%=dir%>_delty_o, <%=dir%>_pkt_o}),
+																							.datai({imm_<%=dir%>_destx_o, imm_<%=dir%>_desty_o, imm_<%=dir%>_pkt_o}),
+																							.datao({<%=dir%>_destx_o, <%=dir%>_desty_o, <%=dir%>_pkt_o}),
 																							.vldo(<%=dir%>vld_o), .rdyo(<%=dir%>_gnt_o));
+
+<%for i in range("I", "N", "S", "E", "W"):%>
+logic [4:0] <%=i%>_req, <%=i%>_vreq;
+<%%>
+
+// Declare partition of interrupt (POI) to reduce logic of comparsion destination
+localparam X_COOR_POI = X_COOR > (X_DIM_W/2) ? X_DIM_W - X_COOR - 1 : X_COOR;
+localparam Y_COOR_POI = Y_COOR > (Y_DIM_W/2) ? Y_DIM_W - Y_COOR - 1 : Y_COOR;
+
+// = Generic dir matrix - 1 means routing direction =
+// = 2 | 0 0 0  =
+// = 1 | 0 1 0  =
+// = 0 | 0 0 0  =
+// =   -------- =
+// =     0 1 2 =
+
+<%for i in range("I", "N", "S", "E", "W"):%>
+logic [X_COOR_POI-1:0] <%=i%>_destx;
+logic [Y_COOR_POI-1:0] <%=i%>_desty;
+logic [2:0] <%=i%>_xdir, <%=i%>_ydir;
+generate
+	if (X_COOR > (X_DIM_W/2)) begin: compare_higher_part_<%=i%>
+		assign <%=i%>_destx = <%=i%>_destx_i [X_DIM_W-1 -: X_COOR_POI];
+		assign <%=i%>_xdir [0] = ~|<%=i%>_destx; 
+		assign <%=i%>_xdir [2] =  |<%=i%>_destx; 
+	end else begin: compare_lower_part_<%=i%>
+		assign <%=i%>_destx = <%=i%>_destx_i [0 +: X_COOR_POI];
+		assign <%=i%>_xdir [2] = ~|<%=i%>_destx; 
+		assign <%=i%>_xdir [0] =  |<%=i%>_destx; 
+	end
+endgenerate
+	assign <%=i%>_xdir [1] = <%=i%>_destx_i [X_COOR];
+	assign <%=i%>_ydir [1] = <%=i%>_destx_y [Y_COOR];
+<%%>
+
+// I inbound
+always @(*) begin
+	case ({I_xdir, I_ydir})
+		6'b000_000 : 
+	endcase
+end
 
 
 endmodule
