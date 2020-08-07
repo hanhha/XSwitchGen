@@ -1,0 +1,294 @@
+// HMTH (c)
+// Arbitrate requests from masters
+// There is no dupplicated request to same target at output
+
+module <%=prefix%>XArbiter (
+    input logic clk
+  , input logic rstn
+
+<%for i in range(0,n_initiators):%>
+  , input  logic [<%=n_targets-1%>:0] I<%=i%>_req
+  , output logic [<%=n_targets-1%>:0] I<%=i%>_vreq
+<%%>
+  , input logic [<%=n_targets-1%>:0] T_rdy
+);
+
+<%for i in range(0,n_initiators):%>
+logic [<%=n_targets-1%>:0] I<%=i%>_req_avail;
+assign I<%=i%>_req_avail = I<%=i%>_req & T_rdy;
+
+<%%>
+
+<%for j in range(0,n_targets):%>
+logic [<%=n_initiators-1%>:0] T<%=j%>_gnt, req_T<%=j%>;
+assign req_T<%=j%> = {<%=", ".join(["I" + str(i) + "_req_avail [" + str(j) + "]" for i in reversed(range(0,n_initiators))])%>};
+<%=cmm_prefix%>XArbiter_RR #(<%=n_initiators%>) T<%=j%>_RR (.clk (clk), .rstn (rstn), .req (req_T<%=j%>), .gnt (T<%=j%>_gnt));
+
+<%%>
+
+<%for i in range(0, n_initiators):%>
+assign I<%=i%>_vreq = {<%=", ".join(["T" + str(j) + "_gnt [" + str(i) + "]" for j in reversed(range(0,n_targets))])%>};
+<%%>
+
+`ifndef SYNTHESIS
+// Validating inputs
+// All I*_req are onehot0
+  `ifndef RICHMAN
+<%for i in range(0, n_initiators):%>
+    integer I<%=i%>_ones;
+<%%>
+    integer i;
+
+/* verilator lint_off WIDTH */
+    always @(*) begin
+<%for i in range(0, n_initiators):%>
+      I<%=i%>_ones = 0;
+<%%>
+      for (i = 0; i < <%=n_targets%>; i++) begin 
+<%for i in range(0, n_initiators):%>
+        I<%=i%>_ones = I<%=i%>_ones + I<%=i%>_req [i];
+<%%>
+      end
+<%for i in range(0, n_initiators):%>
+      assume (I<%=i%>_ones <= 1);
+<%%>
+    end
+/* verilator lint_on WIDTH */
+  `else
+    always @(*) begin
+<%for i in range(0, n_initiators):%>
+      assume ($onehot0(I<%=i%>_req));
+<%%>
+    end
+  `endif
+
+// Verifying output
+  always @(*) begin
+<%for i in range(0,n_initiators):%>
+<%  for j in range(i+1,n_initiators):%>
+    assert ((I<%=i%>_vreq ^ I<%=j%>_vreq) == (I<%=i%>_vreq | I<%=j%>_vreq));
+<%  %>
+<%%>
+  end
+
+`endif
+
+endmodule
+// EOF
+// HMTH (c)
+// Matrix of XPoints
+
+module <%=prefix%>XMatrix #(parameter VDW = <%=vdw%>) (
+    input  logic [<%=n_targets-1%>:0] I0_req
+<%for i in range(1,n_initiators):%>
+  , input  logic [<%=n_targets-1%>:0] I<%=i%>_req
+<%%>
+
+<%for i in range(0,n_initiators):%>
+  , input  logic [VDW-1 : 0] I<%=i%> 
+<%%>
+
+<%for i in range(0,n_targets):%>
+  , output logic [VDW-1 : 0] T<%=i%> 
+<%%>
+);
+
+<%for i in range(0,n_initiators):%>
+<%  for j in range(0,n_targets):%>
+logic  X<%=i%><%=j%>_BEN;
+logic [VDW-1:0] X<%=i%><%=j%>_I0, X<%=i%><%=j%>_I1, X<%=i%><%=j%>_O0, X<%=i%><%=j%>_O1;
+<%  %>
+<%%>
+
+// Connections
+<%for i in range(0,n_initiators):%>
+<%  for j in range(0,n_targets):%>
+<%    if i == 0:%>
+assign X<%=i%><%=j%>_I0 = {VDW{1'b0}};
+<%    else:%>
+assign X<%=i%><%=j%>_I0 = X<%=i-1%><%=j%>_O1;
+<%    %>
+<%    if j < n_targets-1:%>
+assign X<%=i%><%=j%>_I1 = X<%=i%><%=j+1%>_O0;
+<%    else:%>
+assign X<%=i%><%=j%>_I1 = I<%=i%>;
+<%    %>
+<%  %>
+<%%>
+
+<%for j in range(0,n_targets):%>
+assign T<%=j%> = X<%=n_initiators-1%><%=j%>_O1;
+<%%>
+
+<%for i in range(0,n_initiators):%>
+<%  for j in range(0,n_targets):%>
+<%    if conn_matrix[i][j] == 0:%>
+assign X<%=i%><%=j%>_BEN = 1'b0; // Unconnected
+<%    else:%>
+assign X<%=i%><%=j%>_BEN = I<%=i%>_req [<%=j%>];
+<%    %>
+<%  %>
+<%%>
+
+// Matrix instance
+// ==========================
+//     I_0
+// I_1  +  O_0
+//     O_1
+// assign O0 = BEN ? I0 : I1;
+// assign O1 = BEN ? I1 : I0;
+// ==========================
+<%for i in range(0,n_initiators):%>
+<%  for j in range(0,n_targets):%>
+assign X<%=i%><%=j%>_O0 =  X<%=i%><%=j%>_BEN ? X<%=i%><%=j%>_I0 : X<%=i%><%=j%>_I1;
+assign X<%=i%><%=j%>_O1 =  X<%=i%><%=j%>_BEN ? X<%=i%><%=j%>_I1 : X<%=i%><%=j%>_I0;
+<%  %>
+<%%>
+
+`ifndef SYNTHESIS
+// Validating inputs
+// All I*_req are onehot0
+  `ifndef RICHMAN
+<%for i in range(0, n_initiators):%>
+    integer I<%=i%>_ones;
+<%%>
+    integer i;
+
+/* verilator lint_off WIDTH */
+    always @(*) begin
+<%for i in range(0, n_initiators):%>
+      I<%=i%>_ones = 0;
+<%%>
+      for (i = 0; i < <%=n_targets%>; i++) begin 
+<%for i in range(0, n_initiators):%>
+        I<%=i%>_ones = I<%=i%>_ones + I<%=i%>_req [i];
+<%%>
+      end
+<%for i in range(0, n_initiators):%>
+      assume (I<%=i%>_ones <= 1);
+<%%>
+    end
+/* verilator lint_on WIDTH */
+  `else
+    always @(*) begin
+<%for i in range(0, n_initiators):%>
+      assume ($onehot0 (I<%=i%>_req));
+<%%>
+    end
+  `endif
+
+// Guarantee no dupplicated request
+  always @(*) begin
+<%for i in range(0,n_initiators):%>
+<%  for j in range(i+1,n_initiators):%>
+    assume ((I<%=i%>_req ^ I<%=j%>_req) == (I<%=i%>_req | I<%=j%>_req));
+<%  %>
+<%%>
+  end
+
+// Verifying output
+/* verilator lint_off CASEINCOMPLETE */
+  always @(*) begin
+<%for i in range(0,n_initiators):%>
+    case (I<%=i%>_req)
+<%  for j in range(0,n_targets):%>
+<%    if conn_matrix[i][j] == 1:%>
+      <%=n_targets%>'d<%=1 << j%>: assert (T<%=j%> == I<%=i%>);
+<%    %>
+<%  %>
+    endcase
+<%%>
+  end
+/* verilator lint_on CASEINCOMPLETE */
+
+`endif
+
+endmodule
+//EOF
+// HMTH (c)
+
+module <%=prefix%>XRouter #(parameter VDW = <%=vdw%>, DW = <%=pktwidth%>) (
+    input logic clk
+  , input logic rstn
+
+<%for i in range(0,n_initiators):%>
+  , input  logic           I<%=i%>_vld
+  , input  logic [VDW-1:0] I<%=i%>_pkt // {init_tag, tgt_tag, pkt (tgt addr + data)}
+  , output logic           I<%=i%>_gnt
+<%%>
+
+<%for j in range(0,n_targets):%>
+  , input  logic           T<%=j%>_rdy
+  , output logic           T<%=j%>_vld
+  , output logic [VDW-1:0] T<%=j%>_pkt // {init_tag, tgt_tag, pkt (tgt addr + data}
+<%%>
+);
+
+<%for i in range(0,n_initiators):%>
+logic [<%=n_targets-1%>:0] I<%=i%>_req, I<%=i%>_vreq;
+<%%>
+
+<%for i in range(0,n_initiators):%>
+always @(*) begin
+  case (I<%=i%>_pkt [<%=vdw-initid_width-1%>:<%=pktwidth%>])
+<%  for j in range(0,n_targets):%>
+<%    pre = n_targets - (j + 1) %>
+    <%=targetid_width%>'d<%=j%>    : I<%=i%>_req = {<%=str(pre) +"'b0," if pre > 0 else ""%> I<%=i%>_vld<%=", " + str(j) + "'b0" if j > 0 else ""%>};
+<%  %>
+    default : I<%=i%>_req = <%=n_targets%>'b0;
+  endcase
+end
+<%%>
+
+<%for i in range(0,n_initiators):%>
+assign I<%=i%>_gnt = |I<%=i%>_vreq;
+<%%>
+
+logic [<%=n_targets-1%>:0] T_rdy;
+assign T_rdy = {<%=", ".join(["T" + str(i) + "_rdy" for i in reversed(range(0, n_targets))])%>};
+
+<%for i in range (0,n_initiators):%>
+logic [VDW:0] I<%=i%>_pkt_ex;
+assign I<%=i%>_pkt_ex = {I<%=i%>_pkt, I<%=i%>_vld};
+
+<%%>
+
+<%for j in range (0,n_targets):%>
+logic [VDW:0] T<%=j%>_pkt_ex;
+assign {T<%=j%>_pkt, T<%=j%>_vld} = T<%=j%>_pkt_ex;
+
+<%%>
+
+<%=prefix%>XArbiter XArbiter (.clk (clk), .rstn (rstn)
+                   , .T_rdy   (T_rdy)
+<%for i in range (0,n_initiators):%>
+                   , .I<%=i%>_req  (I<%=i%>_req)
+                   , .I<%=i%>_vreq (I<%=i%>_vreq)
+<%%>
+                  );
+
+<%=prefix%>XMatrix #(VDW+1) XMatrix (
+<%for j in range (0,n_targets):%>
+<%	if j == 0:%>
+                          .T<%=j%> (T<%=j%>_pkt_ex)
+<%	else:%>
+                        , .T<%=j%> (T<%=j%>_pkt_ex)
+<%	%>
+<%%>
+<%for i in range (0,n_initiators):%>
+                        , .I<%=i%>_req (I<%=i%>_vreq)
+                        , .I<%=i%>     (I<%=i%>_pkt_ex)
+<%%>
+                       );
+
+`ifndef SYNTHESIS
+// Validating output
+always @(*) begin
+<%for j in range (0,n_targets):%>
+  if (T<%=j%>_vld) assert (T<%=j%>_pkt [<%=vdw-initid_width-1%>:<%=pktwidth%>] == <%=j%>);
+<%%>
+end
+`endif
+
+endmodule
+// EOF
