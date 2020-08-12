@@ -2,7 +2,7 @@
 // Synchronizer with reset to all 0. 
 
 // In below module, N is usually 2 or 3 (make sure to evaluate MTBF)
-module <%=cmm_prefix%>Syncer #(parameter N = 2) (
+module XSyncer #(parameter N = 2) (
   input logic clk,
   input logic rstn,
 

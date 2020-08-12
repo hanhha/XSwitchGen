@@ -1,6 +1,6 @@
 // HMTH (c)
 
-module <%=cmm_prefix%>XSwitch (
+module <%=prefix%>XSwitch (
     input logic clk
   , input logic rstn
 

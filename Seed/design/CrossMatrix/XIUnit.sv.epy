@@ -1,0 +1,90 @@
+// HMTH (c)
+
+// Readable-Writable Initiator Unit 
+module XIUnit #(parameter AW = 19, OUTSTANDING_NUM = 2, ID = 0, SAW = 32, SDW = 32, IDW = 3) (
+    input logic clk
+  , input logic rstn
+
+  , input  logic              req_vld
+  , output logic              req_gnt
+  , input  logic [AW-1:0]     req_adr
+  , input  logic [DW-1:0]     req_dat
+	, input  logic              req_wr
+	, input  logic [(DW/8)-1:0] req_strb
+
+  , output logic                                             tpkt_vld
+  , output logic [(IDW*2 + SAW + 1 + (SDW/8) + SDW) - 1 : 0] tpkt_dat // {INITID, TGTID, LOAD = (S_ADR, WE, S_STRB, S_DATA) }
+  , input  logic                                             tpkt_gnt
+
+  , input  logic                         rpkt_vld
+  , output logic                         rpkt_gnt
+  , input  logic [(IDW*2 + SDW) - 1 : 0] rpkt_dat // {TGTID, INITID, LOAD = (S_DATA) }
+
+  , output logic           rsp_vld
+  , input  logic           rsp_gnt
+  , output logic [DW-1:0]  rsp_dat
+);
+
+logic [<%=targetid_width-1%>:0] tgtid;
+
+logic <%=", ".join(["T" + str(i) + "_hit" for i in range(n_targets)])%>;
+
+/* verilator lint_off WIDTH */
+<%for i in range(n_targets):%>
+assign T<%=i%>_hit = (req_adr & <%=address_map["T"+str(i)][0]%>) == <%=address_map["T"+str(i)][1]%> ? 1'b1 : 1'b0;
+<%%>
+/* verilator lint_on WIDTH */
+
+assign tgtid = <%=" | ".join(["{" + str(targetid_width) + "{T" + str(i) + "_hit}} & " + str(targetid_width) + "'d" + str(i) for i in range(n_targets)])%>;
+
+localparam SYS_STRB  = SYS_DW / 8;
+localparam LOC_VDW   = AW + SYS_DW + SYS_STRB + 1 + <%=targetid_width%>;
+localparam FB_VDW = VDW - SYS_AW - SYS_STRB - 1;
+
+logic [LOC_VDW-1:0]  req_pkt, tmp_tpkt_dat;
+
+assign req_pkt = {tgtid, req_adr, req_wr, req_strb, req_dat};
+
+logic wait_rsp;
+
+`ifndef SELECT_SRSTn
+always @(posedge clk or negedge rstn) begin
+`else
+always @(posedge clk) begin
+`endif
+	if (rstn == 1'b0) begin
+		wait_rsp <= 1'b0;
+	end else begin
+		if (tpkt_vld & tpkt_gnt)
+			wait_rsp <= 1'b1;
+		else if (rsp_vld & rsp_gnt)
+			wait_rsp <= 1'b0;
+		else
+			wait_rsp <= wait_rsp;
+	end
+end
+
+logic tmp_tpkt_vld, tmp_tpkt_gnt;
+
+assign tmp_tpkt_gnt = tpkt_gnt & ~wait_rsp;
+assign tpkt_vld     = tmp_tpkt_vld & ~wait_rsp;
+
+XFifo #(.DW(LOC_VDW), .DEPTH(OUTSTANDING_NUM))
+  ReqBuff (.clk (clk), .rstn (rstn),
+        .din    (req_pkt),      .we      (req_vld),
+        .dout   (tmp_tpkt_dat), .re      (tmp_tpkt_gnt),
+        .full_n (req_gnt),      .empty_n (tmp_tpkt_vld)
+);
+
+assign tpkt_dat = {ID[<%=initid_width-1%>:0], tmp_tpkt_dat [(LOC_VDW-1) -: <%=targetid_width%>], {(SYS_AW-AW){1'b0}}, tmp_tpkt_dat [SYS_DW + SYS_STRB + 1 + AW - 1 : 0]};
+
+XRegSlice #(.D_WIDTH (SYS_DW))
+	RspHndSk (.clk (clk), .rstn (rstn),
+					  .vldi  (rpkt_vld), .rdyi (rpkt_gnt),
+						.vldo  (rsp_vld),  .rdyo (rsp_gnt),
+						.datai (rpkt_dat [SYS_DW-1:0]),
+						.datao (rsp_dat)
+);
+
+endmodule
+// EOF

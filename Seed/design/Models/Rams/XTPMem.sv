@@ -1,4 +1,4 @@
-module <%=cmm_prefix%>XMem #(parameter DW = 8, DEPTH = 4) (
+module XTPMem #(parameter DW = 8, DEPTH = 4) (
     input  logic clk
   , input  logic we
   , input  logic [$clog2(DEPTH)-1:0] waddr

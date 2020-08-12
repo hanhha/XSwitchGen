@@ -1,8 +1,0 @@
-<%=cmm_prefix%>XCommon.sv
-
-<%=cmm_prefix%>req_XPath.sv
-<%=cmm_prefix%>rsp_XPath.sv
-<%=cmm_prefix%>XSwitch.sv
-
-Cells/Cells/<%=cmm_prefix%>XSyncer.sv
-Cells/Rams/<%=cmm_prefix%>XMem.sv
