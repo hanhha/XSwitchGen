@@ -1,6 +1,6 @@
 // HMTH (c)
 
-module XMultiBitSyncer #(parameter DW = 2, N = 2) (
+module XMSyncer #(parameter DW = 2, N = 2) (
   input logic clk,
   input logic rstn,
 

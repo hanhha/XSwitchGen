@@ -30,7 +30,7 @@ XAFifoWCtrl #(.DEPTH(DEPTH), .SYNC_N(W_SYNC_N))
 XAFifoRCtrl #(.DEPTH(DEPTH), .SYNC_N(R_SYNC_N))
 	RCtrl (.clk(rclk), .rstn(rrstn), .re(re), .empty_n(empty_n), .a_g_rptr(a_g_rptr), .a_g_wptr(a_g_wptr), .rptr(rptr));
 
-XMem #(.DW(DW), .DEPTH(DEPTH))
+XTPMem #(.DW(DW), .DEPTH(DEPTH))
 	Mem (.clk(wclk), .we(we_ok), .waddr(wptr), .raddr(rptr), .d(din), .q(dout));
 
 endmodule

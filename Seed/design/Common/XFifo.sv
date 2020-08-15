@@ -24,7 +24,7 @@ XFifoCtrl #(DEPTH)
 	Ctrl (.clk(clk), .rstn(rstn), .we(we), .re(re), .full_n(full_n), .empty_n(empty_n),
 				.we_ok(we_ok), .wptr(wptr), .rptr(rptr));
 
-XMem #(.DW(DW), .DEPTH(DEPTH))
+XTPMem #(.DW(DW), .DEPTH(DEPTH))
 	Mem (.clk(clk), .we(we_ok), .waddr(wptr), .raddr(rptr), .d(din), .q(dout));
 
 endmodule

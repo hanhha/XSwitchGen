@@ -1,7 +1,7 @@
 // HMTH (c)
 
 // Non buffer Upsizer/Downsizer for data
-module XSizer #(parameter AW = 19, DWI = 32, DWO = 64) (
+module XSz #(parameter AW = 19, DWI = 32, DWO = 64) (
   , input  logic [AW-1:0]      req_adr_i
   , input  logic [DWI-1:0]     req_dat_i
 	, input  logic [(DWI/8)-1:0] req_strb_i

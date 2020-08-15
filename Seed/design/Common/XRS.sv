@@ -1,6 +1,6 @@
 // HMTH (c)
 
-module XRegSlice #(parameter D_WIDTH = 16)
+module XRS #(parameter D_WIDTH = 16)
 (
   input  logic clk,
   input  logic rstn,

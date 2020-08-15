@@ -4,7 +4,7 @@
 // Quick explanation: 4'b0110 => 4'b0010 (MASK_OUT == 0)
 //                    4'b0110 => 4'b1100 (MASK_OUT == 1 - output mask instead)
 // ============================================================================
-module XArbFirstOneBit #(parameter DW = 8, MASK_OUT = 0) (
+module XF1b #(parameter DW = 8, MASK_OUT = 0) (
   input  logic [DW-1:0] i,
   output logic [DW-1:0] o
 );

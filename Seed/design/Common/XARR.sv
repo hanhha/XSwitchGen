@@ -2,37 +2,37 @@
 
 // Round-robin arbiter
 
-module XArbiter_RR #(parameter REQ_N = <%=n_initiators%>) (
+module XARR #(parameter N = <%=n_initiators%>) (
     input logic clk
   , input logic rstn
 
-  , input  logic [REQ_N-1:0] req
-  , output logic [REQ_N-1:0] gnt
+  , input  logic [N-1:0] req
+  , output logic [N-1:0] gnt
 );
 
-logic [REQ_N-1:0] mask, nxt_mask;
-logic [REQ_N-1:0] masked_req;
+logic [N-1:0] mask, nxt_mask;
+logic [N-1:0] masked_req;
 
-XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(1)) mask_gen (.i(gnt), .o(nxt_mask));
+XArbFirstOneBit #(.DW(N), .MASK_OUT(1)) mask_gen (.i(gnt), .o(nxt_mask));
 
 `ifndef SELECT_SRSTn
 always @(posedge clk or negedge rstn) begin
 `else
 always @(posedge clk) begin
 `endif
-  if (~rstn) mask <= {REQ_N{1'b1}};
+  if (~rstn) mask <= {N{1'b1}};
   else       mask <= |gnt ? nxt_mask : mask;
 end
 
 assign masked_req = req & mask;
 
-logic [REQ_N-1:0] pre_gnt, pos_gnt;
+logic [N-1:0] pre_gnt, pos_gnt;
 
 // Before pivot
-XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(0)) pre_gnt_gen (.i(req), .o(pre_gnt));
+XArbFirstOneBit #(.DW(N), .MASK_OUT(0)) pre_gnt_gen (.i(req), .o(pre_gnt));
 
 // After pivot
-XArbFirstOneBit #(.DW(REQ_N), .MASK_OUT(0)) pos_gnt_gen (.i(masked_req), .o(pos_gnt));
+XArbFirstOneBit #(.DW(N), .MASK_OUT(0)) pos_gnt_gen (.i(masked_req), .o(pos_gnt));
 
 assign gnt = |masked_req ? pos_gnt : pre_gnt;
 
@@ -44,7 +44,7 @@ assign gnt = |masked_req ? pos_gnt : pre_gnt;
 		/* verilator lint_off WIDTH */
     always @(*) begin
       ones = 0;
-      for (i = 0; i < REQ_N; i++) begin 
+      for (i = 0; i < N; i++) begin 
         ones = ones + gnt [i];
       end
       if (|req) assert (ones == 1);
