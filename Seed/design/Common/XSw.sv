@@ -83,7 +83,10 @@ endmodule
 
 
 
-// N to 1 switch with built-in arbiter (if ARB_EN = 1)
+// N to 1 switch with built-in arbiter (if ARB_EN != 0)
+// ARB_EN = 0 - No arbiter - input must guarantee onehot vector
+// ARB_EN = 1 - Round robin
+// ARB_EN = 2 - Priority
 module XSwN1 #(parameter N = 2, DW = 8, ARB_EN = 1) (
   input  logic clk,
   input  logic rstn,
@@ -108,8 +111,10 @@ always_comb begin
 end
 
 generate
-  if (ARB_EN != 0) begin: need_arb
+  if (ARB_EN == 1) begin: rr_arb
     XARR #(.N(N)) Arb (.clk(clk), .rstn(rstn), .req (vld_i), .gnt(gnt_i), .en(gnt_o));
+  end else if (ARB_EN == 2) begin: pri_arb
+    XAPr #(.N(N)) Arb (.req (vld_i), .gnt(gnt_i), .en(gnt_o));
   end else begin: no_arb
     gnt_i = {N{gnt_o}} & vld_i;
   end

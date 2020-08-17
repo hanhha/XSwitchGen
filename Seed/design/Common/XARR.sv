@@ -6,6 +6,7 @@ module XARR #(parameter N = <%=n_initiators%>) (
     input logic clk
   , input logic rstn
 
+  , input  logic         en
   , input  logic [N-1:0] req
   , output logic [N-1:0] gnt
 );
@@ -20,21 +21,19 @@ always @(posedge clk or negedge rstn) begin
 `else
 always @(posedge clk) begin
 `endif
-  if (~rstn) mask <= {N{1'b1}};
-  else       mask <= |gnt ? nxt_mask : mask;
+  if (~rstn) mask <= {N{1'b0}};
+  else if (en & nxt_mask[N-1]) mask <= {nxt_mask [N-2:0], 1'b0};
 end
 
 assign masked_req = req & mask;
 
-logic [N-1:0] pre_gnt, pos_gnt;
+logic [REQ_N-1:0] pre_mask, pos_mask;
 
-// Before pivot
-XArbFirstOneBit #(.DW(N), .MASK_OUT(0)) pre_gnt_gen (.i(req), .o(pre_gnt));
+XF1b #(N) pre_gnt_gen (.i(req), .o(pre_mask));
+XF1b #(N) pos_gnt_gen (.i(masked_req), .o(pos_mask));
 
-// After pivot
-XArbFirstOneBit #(.DW(N), .MASK_OUT(0)) pos_gnt_gen (.i(masked_req), .o(pos_gnt));
-
-assign gnt = |masked_req ? pos_gnt : pre_gnt;
+assign nxt_mask = pos_mask [N-1] ? pos_mask : pre_mask;
+assign gnt = en ? nxt_mask ^ {nxt_mask[N-2:0], 1'b0} : {N{1'b0}};
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
@@ -47,13 +46,12 @@ assign gnt = |masked_req ? pos_gnt : pre_gnt;
       for (i = 0; i < N; i++) begin 
         ones = ones + gnt [i];
       end
-      if (|req) assert (ones == 1);
+      if (en)
+        if (|req) assert (ones == 1);
+      else
+        assert (ones == 0);
     end
 		/* verilator lint_on WIDTH */
-  `else
-    always @(*) begin
-      assert (req |-> $onehot0 (gnt));
-    end
   `endif
 `endif
 

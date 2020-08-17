@@ -47,13 +47,13 @@ assign tmp_req_wr   = tpkt_dat [SDW + SSTRB];
 
 generate
   if (DW != SDW) begin: sizer
-    XSizer #(.AW(AW), .DWI(SDW), .DWO(DW))
+    XSz #(.AW(AW), .DWI(SDW), .DWO(DW))
       ReqSizer (.req_adr_i (tmp_req_adr), .req_dat_i (tpkt [SDW-1:0]), .req_strb_i (tpkt_dat [SDW + SSTRB - 1 : SDW]),
                 .req_adr_o (),            .req_dat_o (tmp_req_dat),    .req_strb_o (tmp_req_strb));
 
     assign req_tag = {tmp_req_attr [(REQ_VDW-1) -: IDW], tmp_req_attr [(1 + (DW/8) + DW) +: WAW]};
 
-    XSizer #(.AW(WAW), .DWI(DW), .DWO(SDW))
+    XSz #(.AW(WAW), .DWI(DW), .DWO(SDW))
       RspSizer (.req_adr_i (tag [WAW-1:0]), .req_dat_i (rsp_dat),                .req_strb_i ({(DW/8){1'b0}}),
                 .req_adr_o (),              .req_dat_o (tmp_rpkt_dat [SDW-1:0]), .req_strb_o ());
     assign tmp_rpkt_dat [RSP_VDW-1:SDW] = {ID [IDW-1:0], tag[WAW +: IDW]};
@@ -86,7 +86,7 @@ XFifo #(.DW(WAW + IDW), .DEPTH(OUTSTANDING_NUM))
            .full_n (), .empty_n ()
 );
 
-XRegSlice #(.D_WIDTH (FB_VDW))
+XRs #(.D_WIDTH (FB_VDW))
 	RspHndSk (.clk (clk), .rstn (rstn),
 					  .vldi (rsp_vld),  .rdyi (rsp_gnt),
 						.vldo (rpkt_vld), .rdyo (rpkt_gnt),

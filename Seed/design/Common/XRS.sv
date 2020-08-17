@@ -1,6 +1,6 @@
 // HMTH (c)
 
-module XRS #(parameter D_WIDTH = 16)
+module XRs #(parameter D_WIDTH = 16)
 (
   input  logic clk,
   input  logic rstn,
@@ -63,18 +63,18 @@ assign rdyi = state [0];
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
-logic init = 1'b1;
-always @(posedge clk) begin
-  if (init) assume (~rstn);
-  init <= 1'b0;
-end
-
-// Validating register slice behavior 
-always @(posedge clk) begin
-  if (rstn) begin
-    if ($past(vldi) & $past(rdyo)) assert (vldo & (datao == $past(datai))); // After 1 cycle, data must arrive output port
-  end
-end
+    logic init = 1'b1;
+    always @(posedge clk) begin
+      if (init) assume (~rstn);
+      init <= 1'b0;
+    end
+    
+    // Validating register slice behavior 
+    always @(posedge clk) begin
+      if (rstn) begin
+        if ($past(vldi) & $past(rdyo)) assert (vldo & (datao == $past(datai))); // After 1 cycle, data must arrive output port
+      end
+    end
   `else
 		ast_delay_1cyc: assert property (@(posedge clk) disable iff (!rstn) vldi & rdyo |=> vldo & (datao = $past(datai)));
 	`endif

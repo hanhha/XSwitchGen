@@ -1,10 +1,9 @@
 // HMTH (c)
 
 // ============================================================================
-// Quick explanation: 4'b0110 => 4'b0010 (MASK_OUT == 0)
-//                    4'b0110 => 4'b1100 (MASK_OUT == 1 - output mask instead)
+// Quick explanation: 4'b0110 => 4'b1110
 // ============================================================================
-module XF1b #(parameter DW = 8, MASK_OUT = 0) (
+module XF1b #(parameter DW = 8) (
   input  logic [DW-1:0] i,
   output logic [DW-1:0] o
 );
@@ -12,11 +11,10 @@ module XF1b #(parameter DW = 8, MASK_OUT = 0) (
 logic [DW-1:0] mask;
 
 localparam N = $clog2(DW);
-
 logic [DW*(N+1)-1:0] comp_grid;
 
 integer k, l;
-always @(*) begin
+always_comb begin
   comp_grid [DW-1:0] = i;
   for (l = 1; l <=N; l++) begin
     for (k = 0; k < DW; k=k+2)
@@ -34,7 +32,7 @@ end
 
 assign mask = comp_grid [(N*DW) +: DW];
 
-assign o = MASK_OUT == 0 ? i & ~(mask << 1) : mask << 1;
+assign o = mask;
 
 endmodule
 // EOF
