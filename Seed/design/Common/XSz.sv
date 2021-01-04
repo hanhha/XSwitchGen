@@ -1,14 +1,14 @@
 // HMTH (c)
 
-// Non buffer Upsizer/Downsizer for data
+// Non bufferred, bytelane based Upsizer/Downsizer for data
 module XSz #(parameter AW = 19, DWI = 32, DWO = 64) (
-  , input  logic [AW-1:0]      req_adr_i
-  , input  logic [DWI-1:0]     req_dat_i
-	, input  logic [(DWI/8)-1:0] req_strb_i
+    input  logic [AW-1:0]      req_adr_s
+  , input  logic [DWI-1:0]     req_dat_s
+	, input  logic [(DWI/8)-1:0] req_strb_s
 
-  , output logic [AW-1:0]      req_adr_o
-  , output logic [DWO-1:0]     req_dat_o
-	, output logic [(DWO/8)-1:0] req_strb_o
+  , output logic [AW-1:0]      req_adr_m
+  , output logic [DWO-1:0]     req_dat_m
+	, output logic [(DWO/8)-1:0] req_strb_m
 );
 
 localparam HIDX = $clog2 (DWO / 8) - 1;
@@ -23,22 +23,22 @@ localparam MUL_DW_1_8th = $clog2(DWI/8);
 generate
   if (DWI < DWO) begin: upsizer
     always @(*) begin
-    	req_strb_o = {(STRBO){1'b0}};
-    	req_dat_o  = {(DWO){1'b0}};
-    	req_strb_o [(req_adr_i [HIDX:LIDX] << MUL_DW_1_8th) +: (DWI/8)] = req_strb; 
-    	req_dat_o  [(req_adr_i [HIDX:LIDX] << MUL_DW) +: DWI] = req_dat; 
+    	req_strb_m = {(STRBO){1'b0}};
+    	req_dat_m  = {(DWO){1'b0}};
+    	req_strb_m [(req_adr_s [HIDX:LIDX] << MUL_DW_1_8th) +: (DWI/8)] = req_strb_s;
+    	req_dat_m  [(req_adr_s [HIDX:LIDX] << MUL_DW) +: DWI] = req_dat_s;
     end
-  end if (DWI > DWO) else begin: downsizer
-    assign req_dat_o  = req_dat_i  [(req_adr_i [HIDX:LIDX] << MUL_DW) +: DW];
-    assign req_strb_o = req_strb_i [(DWO + (req_adr_i [HIDX:LIDX] << MUL_DW_1_8th)) +: (DWI/8)];
+  end else if (DWI > DWO) begin: downsizer
+    assign req_dat_m  = req_dat_s  [(req_adr_s [HIDX:LIDX] << MUL_DW) +: DWI];
+    assign req_strb_m = req_strb_s [(DWO + (req_adr_s [HIDX:LIDX] << MUL_DW_1_8th)) +: (DWI/8)];
   end else begin: keepsizer
-    assign req_dat_o  = req_dat_i;
-    assign req_strb_o = req_strb_i;
+    assign req_dat_m  = req_dat_s;
+    assign req_strb_m = req_strb_s;
   end
 endgenerate
 /* verilator lint_on WIDTH */
 
-assign req_adr_o = req_adr_i;
+assign req_adr_m = req_adr_s;
 
 endmodule
 // EOF

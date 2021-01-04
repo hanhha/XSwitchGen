@@ -14,6 +14,7 @@ localparam N = $clog2(DW);
 logic [DW*(N+1)-1:0] comp_grid;
 
 integer k, l;
+/* verilator lint_off ALWCOMBORDER */
 always_comb begin
   comp_grid [DW-1:0] = i;
   for (l = 1; l <=N; l++) begin
@@ -29,6 +30,7 @@ always_comb begin
       end
   end
 end
+/* verilator lint_on ALWCOMBORDER */
 
 assign mask = comp_grid [(N*DW) +: DW];
 

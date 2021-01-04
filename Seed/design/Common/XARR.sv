@@ -2,7 +2,7 @@
 
 // Round-robin arbiter
 
-module XARR #(parameter N = <%=n_initiators%>) (
+module XARR #(parameter N = 8) (
     input logic clk
   , input logic rstn
 
@@ -13,8 +13,6 @@ module XARR #(parameter N = <%=n_initiators%>) (
 
 logic [N-1:0] mask, nxt_mask;
 logic [N-1:0] masked_req;
-
-XArbFirstOneBit #(.DW(N), .MASK_OUT(1)) mask_gen (.i(gnt), .o(nxt_mask));
 
 `ifndef SELECT_SRSTn
 always @(posedge clk or negedge rstn) begin
@@ -27,7 +25,7 @@ end
 
 assign masked_req = req & mask;
 
-logic [REQ_N-1:0] pre_mask, pos_mask;
+logic [N-1:0] pre_mask, pos_mask;
 
 XF1b #(N) pre_gnt_gen (.i(req), .o(pre_mask));
 XF1b #(N) pos_gnt_gen (.i(masked_req), .o(pos_mask));
@@ -46,10 +44,7 @@ assign gnt = en ? nxt_mask ^ {nxt_mask[N-2:0], 1'b0} : {N{1'b0}};
       for (i = 0; i < N; i++) begin 
         ones = ones + gnt [i];
       end
-      if (en)
-        if (|req) assert (ones == 1);
-      else
-        assert (ones == 0);
+      assert (ones == (en & |req ? 1 : 0));
     end
 		/* verilator lint_on WIDTH */
   `endif

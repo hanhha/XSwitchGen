@@ -5,83 +5,125 @@ module XSwNM #(parameter N = 2, M = 2, DW = 8) (
   input  logic clk,
   input  logic rstn,
 
-  input  logic [N-1:0]    vld_i,
-  input  logic [N*DW-1:0] dat_i,
-  output logic [N-1:0]    gnt_i,
+  input  logic [N-1:0]  vld_s,
+  input  logic [DW-1:0] dat_s [0:N-1],
+  output logic [N-1:0]  gnt_s,
 
-  input  logic [N*M-1:0]  sw_i,
+  input  logic [M-1:0]  tgt_s [0:N-1],
 
-  output logic [M-1:0]    vld_o,
-  output logic [M*DW-1:0] dat_o,
-  input  logic [M-1:0]    gnt_o
+  output logic [M-1:0]  vld_m,
+  output logic [DW-1:0] dat_m [0:M-1],
+  input  logic [M-1:0]  gnt_m
 );
 
-logic [N*M-1:0] i_vld, i_gnt;
-logic [N*M*DW-1:0] i_dat;
+logic [M-1:0]  i_vld [0:N-1], i_gnt[0:N-1];
+logic [DW-1:0] i_dat [0:N-1][0:M-1];
 
 genvar i, j, o;
 generate
   for (i = 0; i < N; i++) begin: input_sw
   XSw1N #(.N(M), .DW(DW))
-    Sw1N (.vld_i(vld_i[i]), .gnt_i(gnt_i[i]), .dat_i(dat_i[DW*i +: DW]), .sw_i(sw_i[M*i +: M]),
-          .vld_o(i_vld[i*M +: M]), .gnt_o(i_gnt[i*M +: M]), .dat_o(i_dat[i*M*DW +: M*DW]));
+    Sw1N (.vld_s(vld_s[i]), .gnt_s(gnt_s[i]), .dat_s(dat_s[i]), .tgt_s(tgt_s[i]),
+          .vld_m(i_vld[i]), .gnt_m(i_gnt[i]), .dat_m(i_dat[i]));
   end
 
   if (N > 1) begin: NxM
-    logic [N*M-1:0] o_vld, o_gnt;
-    logic [N*M*DW-1:0] o_dat;
+    logic [N-1:0]  o_vld [0:M-1], o_gnt [0:M-1];
+    logic [DW-1:0] o_dat [0:M-1][0:N-1];
 
     for (o = 0; o < M; o++) begin: output_sw
       for (j = 0; j < N; j++) begin: internal // tranpose matrix
-        assign o_vld [o*N+j] = i_vld [j*M+o];
-        assign o_dat [DW*(o*N+j) +: DW] = i_dat [DW*(j*M+o) +: DW];
-        assign i_gnt [j*M+o] = o_gnt [o*N+j];
+        assign o_vld [o][j] = i_vld [j][o];
+        assign o_dat [o][j] = i_dat [j][o];
+        assign i_gnt [j][o] = o_gnt [o][j];
       end
 
       XSwN1 #(.N(N), .DW(DW), .ARB_EN(1))
         SwN1 (.clk(clk), .rstn(rstn),
-              .vld_i(o_vld[o*N +: N]), .gnt_i(o_gnt[o*N +: N]), .dat_i(o_dat[o*N*DW +: DW]),
-              .vld_o(vld_o[o]), .gnt_o(gnt_o[o]), .dat_o(dat_o[DW*o +: DW]));
+              .vld_s(o_vld[o]), .gnt_s(o_gnt[o]), .dat_s(o_dat[o]),
+              .vld_m(vld_m[o]), .gnt_m(gnt_m[o]), .dat_m(dat_m[o]));
 
   end
-  end else begin: 1xM 
-    assign vld_o = i_vld;
-    assign i_gnt = gnt_o;
-    assign dat_o = i_dat;
+  end else begin: one_to_many 
+    assign vld_m = i_vld;
+    assign i_gnt = gnt_m;
+    assign dat_m = i_dat;
   end
 
 endgenerate
 
+`ifndef SYNTHESIS
+  `ifndef RICHMAN
+    integer si, sj;
+    integer stgt [0:M-1], stgt_gnt [0:M-1];
+		/* verilator lint_off WIDTH */
+    always @(posedge clk) begin
+      if (rstn) begin
+        for (si = 0; si < M; si++) begin
+          if (vld_m [si] && gnt_m [si]) begin
+            stgt [si] = 0;
+            stgt_gnt [si] = 0;
+            for (sj = 0; sj < N; sj++) begin
+              stgt     [si] = stgt [si] + (tgt_s [sj][si] == 1'b1 ? vld_s [sj] : 1'b0);
+              stgt_gnt [si] = stgt_gnt [si] + (tgt_s [sj][si] == 1'b1 ? (dat_m [si] == dat_s[sj]) & gnt_s [sj] & vld_s [sj] : 1'b0);
+            end
+            assert (stgt [si] > 1); // Had at least 1 access in slave side
+            assert (stgt_gnt [si] == 1); // Only 1 req was acked
+          end
+        end
+      end
+    end
+		/* verilator lint_on WIDTH */
+  `else
+  `endif
+`endif
+
 endmodule
-
-
 
 // 1 to N switch
 module XSw1N #(parameter N = 2, DW = 8) (
-  input  logic          vld_i,
-  input  logic [DW-1:0] dat_i,
-  output logic          gnt_i,
+  input  logic          vld_s,
+  input  logic [DW-1:0] dat_s,
+  output logic          gnt_s,
 
-  input  logic [N-1:0]  sw_i,
+  input  logic [N-1:0]  tgt_s,
 
-  output logic [N-1:0]    vld_o,
-  output logic [N*DW-1:0] dat_o,
-  input  logic [N-1:0]    gnt_o
+  output logic [N-1:0]  vld_m,
+  output logic [DW-1:0] dat_m [0:N-1],
+  input  logic [N-1:0]  gnt_m
 );
 
 integer i;
 always_comb begin
   for (i = 0; i < N; i++) begin
-    vld_o = vld_i & sw_i [i];
-    dat_o [DW*i +: DW] = {N{sw_i}} & dat_i;
+    vld_m [i] = vld_s & tgt_s [i];
+    dat_m [i] = dat_s;
   end
 end
 
-assign gnt_i = |(gnt_o & sw_i);
+`ifndef SYNTHESIS
+  `ifndef RICHMAN
+    integer ai;
+    integer ones;
+
+		/* verilator lint_off WIDTH */
+    always_comb begin
+      if (vld_s) begin
+        ones = 0;
+        for (ai = 0; ai < N; ai++) begin
+          ones = ones + tgt_s [ai];
+        end
+        if (vld_s) assume ((ones == 1)); // Target list must be one hot 
+      end
+    end
+		/* verilator lint_on WIDTH */
+  `else
+  `endif
+`endif
+
+assign gnt_s = |(gnt_m & tgt_s);
 
 endmodule
-
-
 
 // N to 1 switch with built-in arbiter (if ARB_EN != 0)
 // ARB_EN = 0 - No arbiter - input must guarantee onehot vector
@@ -91,53 +133,52 @@ module XSwN1 #(parameter N = 2, DW = 8, ARB_EN = 1) (
   input  logic clk,
   input  logic rstn,
 
-  input  logic [N-1:0]    vld_i,
-  input  logic [N*DW-1:0] dat_i,
-  output logic [N-1:0]    gnt_i,
+  input  logic [N-1:0]  vld_s,
+  input  logic [DW-1:0] dat_s [0:N-1],
+  output logic [N-1:0]  gnt_s,
 
-  output logic          vld_o,
-  output logic [DW-1:0] dat_o,
-  input  logic          gnt_o
+  output logic          vld_m,
+  output logic [DW-1:0] dat_m,
+  input  logic          gnt_m
 );
 
-assign vld_o = |vld_i;
+assign vld_m = |vld_s;
 
 integer i;
 always_comb begin
-  dat_o = {DW{1'b0}};
+  dat_m = {DW{1'b0}};
   for (i = 0; i < N; i++) begin
-    dat_o = dat_o | ({DW{gnt_i [i]}} & dat_i [DW*i +: DW]);
+    dat_m = dat_m | ({DW{gnt_s [i]}} & dat_s [i]);
   end
 end
 
 generate
   if (ARB_EN == 1) begin: rr_arb
-    XARR #(.N(N)) Arb (.clk(clk), .rstn(rstn), .req (vld_i), .gnt(gnt_i), .en(gnt_o));
+    XARR #(.N(N)) Arb (.clk(clk), .rstn(rstn), .req (vld_s), .gnt(gnt_s), .en(gnt_m));
   end else if (ARB_EN == 2) begin: pri_arb
-    XAPr #(.N(N)) Arb (.req (vld_i), .gnt(gnt_i), .en(gnt_o));
+    XAPr #(.N(N)) Arb (.req (vld_s), .gnt(gnt_s), .en(gnt_m));
   end else begin: no_arb
-    gnt_i = {N{gnt_o}} & vld_i;
+    assign gnt_s = {N{gnt_m}} & vld_s;
   end
 endgenerate
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
     integer ones;
-    integer i;
+    integer ai;
 
 		/* verilator lint_off WIDTH */
-    always_comb begin
-      ones = 0;
-      for (i = 0; i < N; i++) begin 
-        ones = ones + gnt_i [i];
+    always @(posedge clk)  begin
+      if (rstn) begin
+        ones = 0;
+        for (ai = 0; ai < N; ai++) begin 
+          ones = ones + gnt_s [ai];
+        end
+        assert ((ones == 1)||(ones == 0));
       end
-      assert ((ones == 1)||(ones == 0));
     end
 		/* verilator lint_on WIDTH */
   `else
-    always_comb begin
-      assert ($onehot0 (gnt_i));
-    end
   `endif
 `endif
 

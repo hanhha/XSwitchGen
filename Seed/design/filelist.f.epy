@@ -1,3 +1,0 @@
-<%for i in list_of_files:%>
-<%=i%>
-<%%>

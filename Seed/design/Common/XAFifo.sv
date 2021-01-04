@@ -53,7 +53,7 @@ localparam AW = $clog2(DEPTH);
 logic [AW:0] synced_g_rptr;
 logic [AW:0] nxt_bin_cnt, bin_cnt, nxt_g_wptr;
 
-XMultiBitSyncer #(.DW(AW+1), .N(SYNC_N)) rptr_syncer (.clk(clk), .rstn(rstn), .d(a_g_rptr), .q(synced_g_rptr));
+XMSyncer #(.DW(AW+1), .N(SYNC_N)) rptr_syncer (.clk(clk), .rstn(rstn), .d(a_g_rptr), .q(synced_g_rptr));
 
 `ifndef SELECT_SRSTn 
 always @(posedge clk, negedge rstn) begin
@@ -97,7 +97,7 @@ logic        re_ok;
 logic [AW:0] synced_g_wptr;
 logic [AW:0] nxt_bin_cnt, bin_cnt, nxt_g_rptr;
 
-XMultiBitSyncer #(.DW(AW+1), .N(SYNC_N)) wptr_syncer (.clk(clk), .rstn(rstn), .d(a_g_wptr), .q(synced_g_wptr));
+XMSyncer #(.DW(AW+1), .N(SYNC_N)) wptr_syncer (.clk(clk), .rstn(rstn), .d(a_g_wptr), .q(synced_g_wptr));
 
 `ifndef SELECT_SRSTn 
 always @(posedge clk, negedge rstn) begin

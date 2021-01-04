@@ -5,13 +5,13 @@ module XRs #(parameter D_WIDTH = 16)
   input  logic clk,
   input  logic rstn,
 
-  input  logic vldi,
-  input  logic rdyo,
-  input  logic [D_WIDTH-1:0] datai,
+  input  logic vld_s,
+  output logic rdy_s,
+  input  logic [D_WIDTH-1:0] data_s,
 
-  output logic vldo,
-  output logic rdyi,
-  output logic [D_WIDTH-1:0] datao
+  output logic vld_m,
+  input  logic rdy_m,
+  output logic [D_WIDTH-1:0] data_m
 );
 
   localparam IDLE  = 2'b01;
@@ -19,8 +19,8 @@ module XRs #(parameter D_WIDTH = 16)
   localparam BUSY1 = 2'b10;
 
   logic [1:0] state, nxt_state;
-  logic nxt_vldo;
-  logic [D_WIDTH-1:0] nxt_datao, saved_data;
+  logic nxt_vld_m;
+  logic [D_WIDTH-1:0] nxt_data_m, saved_data;
 
 `ifndef SELECT_SRSTn
 always @(posedge clk or negedge rstn) begin
@@ -29,37 +29,37 @@ always @(posedge clk) begin
 `endif
   if (rstn == 1'b0) begin
     state <= BUSY0;
-    vldo  <= 1'b0;
+    vld_m  <= 1'b0;
   end else begin
-    case (state):
+    case (state)
       IDLE:  begin
-               state <= rdyo ? IDLE
-                             : vldi & vldo ? BUSY1
-                                           : vldi ? BUSY0 : state;
-               vldo  <= vldi;
-               datao <= rdyo ? datai
-                             : ~vldi & vldo ? datai : datao;
-               saved_data <= ~rdyo & vldo ? datai : saved_data;
+               state <= rdy_m ? IDLE
+                             : vld_s & vld_m ? BUSY1
+                                           : vld_s ? BUSY0 : state;
+               vld_m  <= vld_s;
+               data_m <= rdy_m ? data_s
+                             : ~vld_s & vld_m ? data_s : data_m;
+               saved_data <= ~rdy_m & vld_m ? data_s : saved_data;
              end
       BUSY0: begin
-               state <= rdyo ? IDLE : state;
-               vldo  <= rdyo ? 1'b0 : vldo;
+               state <= rdy_m ? IDLE : state;
+               vld_m  <= rdy_m ? 1'b0 : vld_m;
              end
       BUSY1: begin
-							 state <= rdyo ? BUSY0 : state;
-							 datao <= rdyo ? saved_data : datao;
+							 state <= rdy_m ? BUSY0 : state;
+							 data_m <= rdy_m ? saved_data : data_m;
              end
       default: begin
                  state      <= 2'bX;
-                 vldo       <= 1'bX;
-                 datao      <= {(D_WIDTH){1'bx}};
+                 vld_m       <= 1'bX;
+                 data_m      <= {(D_WIDTH){1'bx}};
                  saved_data <= {(D_WIDTH){1'bx}};
                end
     endcase
   end
 end
 
-assign rdyi = state [0];
+assign rdy_s = state [0];
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
@@ -72,11 +72,11 @@ assign rdyi = state [0];
     // Validating register slice behavior 
     always @(posedge clk) begin
       if (rstn) begin
-        if ($past(vldi) & $past(rdyo)) assert (vldo & (datao == $past(datai))); // After 1 cycle, data must arrive output port
+        if ($past(vld_s) & $past(rdy_m)) assert (vld_m & (data_m == $past(data_s))); // After 1 cycle, data must arrive output port
       end
     end
   `else
-		ast_delay_1cyc: assert property (@(posedge clk) disable iff (!rstn) vldi & rdyo |=> vldo & (datao = $past(datai)));
+		ast_delay_1cyc: assert property (@(posedge clk) disable iff (!rstn) vld_s & rdy_m |=> vld_m & (data_m = $past(data_s)));
 	`endif
 `endif
 endmodule
