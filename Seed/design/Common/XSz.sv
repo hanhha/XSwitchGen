@@ -1,44 +1,45 @@
 // HMTH (c)
 
 // Non bufferred, bytelane based Upsizer/Downsizer for data
-module XSz #(parameter AW = 19, DWI = 32, DWO = 64) (
-    input  logic [AW-1:0]      req_adr_s
-  , input  logic [DWI-1:0]     req_dat_s
-	, input  logic [(DWI/8)-1:0] req_strb_s
+module XSz #(parameter A = 19, DI = 32, DO = 64, PI = 40, PO = 72) (
+    input  logic [AW-1:0] adr_s
+  , input  logic [PI-1:0] pld_s
 
-  , output logic [AW-1:0]      req_adr_m
-  , output logic [DWO-1:0]     req_dat_m
-	, output logic [(DWO/8)-1:0] req_strb_m
+  , output logic [AW-1:0] adr_m
+  , output logic [PO-1:0] pld_m
 );
 
-localparam HIDX = $clog2 (DWO / 8) - 1;
-localparam LIDX = $clog2 (DWI / 8);
+localparam HIDX = $clog2 (DO / 8) - 1;
+localparam LIDX = $clog2 (DI / 8);
 
-localparam STRBO  = DWO / 8;
+localparam SO  = DO / 8;
 
-localparam MUL_DW       = $clog2(DWI);
-localparam MUL_DW_1_8th = $clog2(DWI/8);
+localparam MUL_DW       = $clog2(DI);
+localparam MUL_DW_1_8th = $clog2(DI/8);
+
+logic [DI-1:0] i_dat_m;
 
 /* verilator lint_off WIDTH */
 generate
-  if (DWI < DWO) begin: upsizer
+  if (DI < DO) begin: upsizer
     always @(*) begin
-    	req_strb_m = {(STRBO){1'b0}};
-    	req_dat_m  = {(DWO){1'b0}};
-    	req_strb_m [(req_adr_s [HIDX:LIDX] << MUL_DW_1_8th) +: (DWI/8)] = req_strb_s;
-    	req_dat_m  [(req_adr_s [HIDX:LIDX] << MUL_DW) +: DWI] = req_dat_s;
+    	strb_m = {(SO){1'b0}};
+    	dat_m  = {(DO){1'b0}};
+    	strb_m [(adr_s [HIDX:LIDX] << MUL_DW_1_8th) +: (DI/8)] = strb_s;
+    	dat_m  [(adr_s [HIDX:LIDX] << MUL_DW) +: DI] = dat_s;
     end
-  end else if (DWI > DWO) begin: downsizer
-    assign req_dat_m  = req_dat_s  [(req_adr_s [HIDX:LIDX] << MUL_DW) +: DWI];
-    assign req_strb_m = req_strb_s [(DWO + (req_adr_s [HIDX:LIDX] << MUL_DW_1_8th)) +: (DWI/8)];
+  end else if (DI > DO) begin: downsizer
+    assign dat_m  = dat_s  [(adr_s [HIDX:LIDX] << MUL_DW) +: DI];
+    assign strb_m = strb_s [(DWO + (adr_s [HIDX:LIDX] << MUL_DW_1_8th)) +: (DI/8)];
   end else begin: keepsizer
-    assign req_dat_m  = req_dat_s;
-    assign req_strb_m = req_strb_s;
+    assign dat_m  = dat_s;
+    assign strb_m = strb_s;
   end
 endgenerate
 /* verilator lint_on WIDTH */
 
-assign req_adr_m = req_adr_s;
+assign adr_m = adr_s;
+assign sb_m  = sb_s;
 
 endmodule
 // EOF

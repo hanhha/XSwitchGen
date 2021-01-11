@@ -1,0 +1,17 @@
+[options]
+mode prove 
+
+[engines]
+#abc bmc3
+smtbmc
+#boolector
+
+[script]
+read_verilog -sv -formal XSw.sv XARR.sv XAPr.sv XF1b.sv 
+prep -top XSwNM
+
+[files]
+XSw.sv
+XARR.sv
+XAPr.sv
+XF1b.sv

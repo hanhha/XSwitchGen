@@ -15,9 +15,9 @@ logic [N-2:0] sync_ff;
 integer i;
 
 `ifndef SELECT_SRSTn
-always @(posedge clk or negedge rstn) begin
+always_ff @(posedge clk or negedge rstn) begin
 `else
-always @(posedge clk) begin
+always_ff @(posedge clk) begin
 `endif
   if (~rstn) begin
     for (i = 0; i < N-1; i++)

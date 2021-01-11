@@ -1,71 +1,91 @@
 // HMTH (c)
 
 // N inputs x M outputs switch with built-in arbiter
-module XSwNM #(parameter N = 2, M = 2, DW = 8) (
+// Payload has DST_ID (=LU_N) + SRC_ID + AUX) + DATA
+module XSwNM #(parameter N = 2, M = 3, P = 10, D = 8) (
+  // Quasi-static/Static configuration pins
+  input  logic [M*M-1:0] lut, // lut [DEST_ID] = TGT_ID
+
+  // Operation pins
   input  logic clk,
   input  logic rstn,
 
-  input  logic [N-1:0]  vld_s,
-  input  logic [DW-1:0] dat_s [0:N-1],
-  output logic [N-1:0]  gnt_s,
+  input  logic [N-1:0]   vld_s,
+  input  logic [N*P-1:0] pld_s, // [P-1:0] pld_s [0:N-1]
+  output logic [N-1:0]   gnt_s,
 
-  input  logic [M-1:0]  tgt_s [0:N-1],
+  input  logic [N-1:0]   ocy,  // nth agent want to occupy slot from this transaction
+  input  logic [N-1:0]   rel,  // nth agent want to release slot after this transaction
 
-  output logic [M-1:0]  vld_m,
-  output logic [DW-1:0] dat_m [0:M-1],
-  input  logic [M-1:0]  gnt_m
+  output logic [M-1:0]   vld_m,
+  output logic [M*P-1:0] pld_m, // [P-1:0] pld_m [0:M-1],
+  input  logic [M-1:0]   gnt_m
 );
+localparam LU_N = $clog2(M);
 
-logic [M-1:0]  i_vld [0:N-1], i_gnt[0:N-1];
-logic [DW-1:0] i_dat [0:N-1][0:M-1];
+logic [M-1:0]   i_vld [0:N-1], i_gnt [0:N-1];
+logic [P*M-1:0] i_pld [0:N-1];
+logic [M-1:0]   i_tgt [0:N-1];
 
 genvar i, j, o;
 generate
   for (i = 0; i < N; i++) begin: input_sw
-  XSw1N #(.N(M), .DW(DW))
-    Sw1N (.vld_s(vld_s[i]), .gnt_s(gnt_s[i]), .dat_s(dat_s[i]), .tgt_s(tgt_s[i]),
-          .vld_m(i_vld[i]), .gnt_m(i_gnt[i]), .dat_m(i_dat[i]));
+    assign i_tgt [i] = lut [pld_s[(i+1)*P-1 -: LU_N]*M +: M];
+    XSw1N #(.N(M), .D(P))
+      Sw1N (.clk (clk), .rstn (rstn),
+            .vld_s(vld_s[i]), .gnt_s(gnt_s[i]), .pld_s(pld_s[i*P +: P]), .tgt_s(i_tgt[i]),
+            .vld_m(i_vld[i]), .gnt_m(i_gnt[i]), .pld_m(i_pld[i]));
   end
 
   if (N > 1) begin: NxM
-    logic [N-1:0]  o_vld [0:M-1], o_gnt [0:M-1];
-    logic [DW-1:0] o_dat [0:M-1][0:N-1];
+    logic [N-1:0]   o_vld [0:M-1], o_gnt [0:M-1];
+    logic [P*N-1:0] o_pld [0:M-1];
 
     for (o = 0; o < M; o++) begin: output_sw
       for (j = 0; j < N; j++) begin: internal // tranpose matrix
-        assign o_vld [o][j] = i_vld [j][o];
-        assign o_dat [o][j] = i_dat [j][o];
-        assign i_gnt [j][o] = o_gnt [o][j];
+        assign o_vld [o][j]        = i_vld [j][o];
+        assign o_pld [o][j*P +: P] = i_pld [j][o*P +: P];
+        assign i_gnt [j][o]        = o_gnt [o][j];
       end
 
-      XSwN1 #(.N(N), .DW(DW), .ARB_EN(1))
-        SwN1 (.clk(clk), .rstn(rstn),
-              .vld_s(o_vld[o]), .gnt_s(o_gnt[o]), .dat_s(o_dat[o]),
-              .vld_m(vld_m[o]), .gnt_m(gnt_m[o]), .dat_m(dat_m[o]));
-
-  end
+      XSwN1 #(.N(N), .D(P), .ARB_EN(1))
+        SwN1 (.clk(clk), .rstn(rstn), .ocy(ocy), .rel(rel),
+              .vld_s(o_vld[o]), .gnt_s(o_gnt[o]), .pld_s(o_pld[o]),
+              .vld_m(vld_m[o]), .gnt_m(gnt_m[o]), .pld_m(pld_m[o*P +: P]));
+    end
   end else begin: one_to_many 
     assign vld_m = i_vld;
     assign i_gnt = gnt_m;
-    assign dat_m = i_dat;
+    assign pld_m = i_pld;
   end
 
 endgenerate
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
-    integer si, sj;
+    `ifdef FORMAL
+      logic init = 1'b1;
+      always_ff @(posedge clk) begin
+        init <= 1'b0;
+        if (init) assume (~rstn);
+      end
+
+      always_ff @(posedge clk)
+        assume (lut == 9'b100_010_001);
+    `endif
+
     integer stgt [0:M-1], stgt_gnt [0:M-1];
 		/* verilator lint_off WIDTH */
-    always @(posedge clk) begin
+    always_ff @(posedge clk) begin: assertion_blk_0
+      integer si, sj;
       if (rstn) begin
         for (si = 0; si < M; si++) begin
           if (vld_m [si] && gnt_m [si]) begin
             stgt [si] = 0;
             stgt_gnt [si] = 0;
             for (sj = 0; sj < N; sj++) begin
-              stgt     [si] = stgt [si] + (tgt_s [sj][si] == 1'b1 ? vld_s [sj] : 1'b0);
-              stgt_gnt [si] = stgt_gnt [si] + (tgt_s [sj][si] == 1'b1 ? (dat_m [si] == dat_s[sj]) & gnt_s [sj] & vld_s [sj] : 1'b0);
+              stgt     [si] = stgt [si] + (i_tgt [sj][si] == 1'b1 ? vld_s [sj] : 1'b0);
+              stgt_gnt [si] = stgt_gnt [si] + (i_tgt [sj][si] == 1'b1 ? (pld_m [si*P +: P] == pld_s[sj*P +: P]) & gnt_s [sj] & vld_s [sj] : 1'b0);
             end
             assert (stgt [si] > 1); // Had at least 1 access in slave side
             assert (stgt_gnt [si] == 1); // Only 1 req was acked
@@ -81,39 +101,42 @@ endgenerate
 endmodule
 
 // 1 to N switch
-module XSw1N #(parameter N = 2, DW = 8) (
-  input  logic          vld_s,
-  input  logic [DW-1:0] dat_s,
-  output logic          gnt_s,
+module XSw1N #(parameter N = 2, D = 8) (
+  input  logic         clk,
+  input  logic         rstn,
 
-  input  logic [N-1:0]  tgt_s,
+  input  logic         vld_s,
+  input  logic [D-1:0] pld_s,
+  output logic         gnt_s,
 
-  output logic [N-1:0]  vld_m,
-  output logic [DW-1:0] dat_m [0:N-1],
-  input  logic [N-1:0]  gnt_m
+  input  logic [N-1:0] tgt_s,
+
+  output logic [N-1:0]   vld_m,
+  output logic [N*D-1:0] pld_m,
+  input  logic [N-1:0]   gnt_m
 );
 
-integer i;
-always_comb begin
-  for (i = 0; i < N; i++) begin
-    vld_m [i] = vld_s & tgt_s [i];
-    dat_m [i] = dat_s;
-  end
+assign vld_m = {N{vld_s}} & tgt_s;
+
+always_comb begin: pld_m_demux
+  integer i;
+  for (i = 0; i < N; i++)
+    pld_m [i*D +: D] = pld_s;
 end
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
-    integer ai;
-    integer ones;
-
 		/* verilator lint_off WIDTH */
-    always_comb begin
+    always_ff @(posedge clk) begin: onehot_check
+      integer ai;
+      integer ones;
+
       if (vld_s) begin
         ones = 0;
         for (ai = 0; ai < N; ai++) begin
           ones = ones + tgt_s [ai];
         end
-        if (vld_s) assume ((ones == 1)); // Target list must be one hot 
+        assume ((ones == 1)); // Target list must be one hot 
       end
     end
 		/* verilator lint_on WIDTH */
@@ -129,46 +152,80 @@ endmodule
 // ARB_EN = 0 - No arbiter - input must guarantee onehot vector
 // ARB_EN = 1 - Round robin
 // ARB_EN = 2 - Priority
-module XSwN1 #(parameter N = 2, DW = 8, ARB_EN = 1) (
+module XSwN1 #(parameter N = 2, D = 8, ARB_EN = 1) (
   input  logic clk,
   input  logic rstn,
 
-  input  logic [N-1:0]  vld_s,
-  input  logic [DW-1:0] dat_s [0:N-1],
-  output logic [N-1:0]  gnt_s,
+  input  logic [N-1:0]   vld_s,
+  input  logic [N*D-1:0] pld_s,
+  output logic [N-1:0]   gnt_s,
 
-  output logic          vld_m,
-  output logic [DW-1:0] dat_m,
-  input  logic          gnt_m
+  input  logic [N-1:0] ocy,
+  input  logic [N-1:0] rel,
+
+  output logic         vld_m,
+  output logic [D-1:0] pld_m,
+  input  logic         gnt_m
 );
 
-assign vld_m = |vld_s;
+logic [N-1:0] fixed_gnt, nxt_fixed_gnt;
+logic [N-1:0] i_vld_s;
+logic occupied, nxt_occupied;
 
 integer i;
+
 always_comb begin
-  dat_m = {DW{1'b0}};
   for (i = 0; i < N; i++) begin
-    dat_m = dat_m | ({DW{gnt_s [i]}} & dat_s [i]);
+    nxt_fixed_gnt [i] = (~occupied & ocy [i] & gnt_s [i]) | (occupied & fixed_gnt [i] & ~rel [i]);
+  end
+end
+
+`ifndef SELECT_SRSTn
+always_ff @(posedge clk or negedge rstn) begin
+`else
+always_ff @(posedge clk) begin
+`endif
+  if (~rstn)
+    fixed_gnt <= '0;
+  else 
+    fixed_gnt <= nxt_fixed_gnt;
+end
+
+always_comb begin
+  nxt_occupied = 1'b0;
+  for (i = 0; i < N; i++) begin
+    nxt_occupied |= (~occupied & ocy [i] & gnt_s [i]);
+  end
+end
+
+assign i_vld_s = fixed_gnt & vld_s;
+
+assign vld_m = |i_vld_s;
+
+always_comb begin
+  pld_m = {D{1'b0}};
+  for (i = 0; i < N; i++) begin
+    pld_m = pld_m | ({D{gnt_s [i]}} & pld_s [i*D +: D]);
   end
 end
 
 generate
   if (ARB_EN == 1) begin: rr_arb
-    XARR #(.N(N)) Arb (.clk(clk), .rstn(rstn), .req (vld_s), .gnt(gnt_s), .en(gnt_m));
+    XARR #(.N(N)) Arb (.clk(clk), .rstn(rstn), .req (i_vld_s), .gnt(gnt_s), .en(gnt_m));
   end else if (ARB_EN == 2) begin: pri_arb
-    XAPr #(.N(N)) Arb (.req (vld_s), .gnt(gnt_s), .en(gnt_m));
+    XAPr #(.N(N)) Arb (.req (i_vld_s), .gnt(gnt_s), .en(gnt_m));
   end else begin: no_arb
-    assign gnt_s = {N{gnt_m}} & vld_s;
+    assign gnt_s = {N{gnt_m}} & i_vld_s;
   end
 endgenerate
 
 `ifndef SYNTHESIS
   `ifndef RICHMAN
-    integer ones;
-    integer ai;
-
 		/* verilator lint_off WIDTH */
-    always @(posedge clk)  begin
+    always_ff @(posedge clk)  begin: onehot1_check
+      integer ones;
+      integer ai;
+
       if (rstn) begin
         ones = 0;
         for (ai = 0; ai < N; ai++) begin 
