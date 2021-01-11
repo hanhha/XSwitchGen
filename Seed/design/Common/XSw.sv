@@ -1,7 +1,7 @@
 // HMTH (c)
 
 // N inputs x M outputs switch with built-in arbiter
-// Payload has DST_ID (=LU_N) + SRC_ID + AUX) + DATA
+// Payload has DST_ID (=LU_N) + SRC_ID + AccessType + ADDR + ... + WrapType + Strb + real Data
 module XSwNM #(parameter N = 2, M = 3, P = 10, D = 8) (
   // Quasi-static/Static configuration pins
   input  logic [M*M-1:0] lut, // lut [DEST_ID] = TGT_ID
@@ -73,27 +73,6 @@ endgenerate
       always_ff @(posedge clk)
         assume (lut == 9'b100_010_001);
     `endif
-
-    integer stgt [0:M-1], stgt_gnt [0:M-1];
-		/* verilator lint_off WIDTH */
-    always_ff @(posedge clk) begin: assertion_blk_0
-      integer si, sj;
-      if (rstn) begin
-        for (si = 0; si < M; si++) begin
-          if (vld_m [si] && gnt_m [si]) begin
-            stgt [si] = 0;
-            stgt_gnt [si] = 0;
-            for (sj = 0; sj < N; sj++) begin
-              stgt     [si] = stgt [si] + (i_tgt [sj][si] == 1'b1 ? vld_s [sj] : 1'b0);
-              stgt_gnt [si] = stgt_gnt [si] + (i_tgt [sj][si] == 1'b1 ? (pld_m [si*P +: P] == pld_s[sj*P +: P]) & gnt_s [sj] & vld_s [sj] : 1'b0);
-            end
-            assert (stgt [si] > 1); // Had at least 1 access in slave side
-            assert (stgt_gnt [si] == 1); // Only 1 req was acked
-          end
-        end
-      end
-    end
-		/* verilator lint_on WIDTH */
   `else
   `endif
 `endif
