@@ -1,10 +1,10 @@
 // HMTH (c)
 
 // N inputs x M outputs switch with built-in arbiter
-// Payload has DST_ID (=LU_N) + SRC_ID + AccessType + ADDR + ... + WrapType + Strb + real Data
+// Payload has DST_ID (=LU_N) + SRC_ID + AccessType + Ocy + Rel + ADDR + ... + WrapType + Strb + real Data
 module XSwNM #(parameter N = 2, M = 3, P = 10, D = 8) (
   // Quasi-static/Static configuration pins
-  input  logic [M*M-1:0] lut, // lut [DEST_ID] = TGT_ID
+  input  logic [M*M-1:0] cfg_lut, // cfg_lut [DEST_ID] = TGT_ID
 
   // Operation pins
   input  logic clk,
@@ -13,9 +13,6 @@ module XSwNM #(parameter N = 2, M = 3, P = 10, D = 8) (
   input  logic [N-1:0]   vld_s,
   input  logic [N*P-1:0] pld_s, // [P-1:0] pld_s [0:N-1]
   output logic [N-1:0]   gnt_s,
-
-  input  logic [N-1:0]   ocy,  // nth agent want to occupy slot from this transaction
-  input  logic [N-1:0]   rel,  // nth agent want to release slot after this transaction
 
   output logic [M-1:0]   vld_m,
   output logic [M*P-1:0] pld_m, // [P-1:0] pld_m [0:M-1],
@@ -27,10 +24,17 @@ logic [M-1:0]   i_vld [0:N-1], i_gnt [0:N-1];
 logic [P*M-1:0] i_pld [0:N-1];
 logic [M-1:0]   i_tgt [0:N-1];
 
+logic [N-1:0]   ocy;  // nth agent want to occupy slot from this transaction
+logic [N-1:0]   rel;  // nth agent want to release slot after this transaction
+
+
 genvar i, j, o;
 generate
   for (i = 0; i < N; i++) begin: input_sw
-    assign i_tgt [i] = lut [pld_s[(i+1)*P-1 -: LU_N]*M +: M];
+    assign i_tgt [i] = cfg_lut [pld_s[(i+1)*P-1 -: LU_N]*M +: M];
+    assign ocy   [i] = pld_s [P-1 - LU_N - $clog2(N) -1];
+    assign rel   [i] = pld_s [P-1 - LU_N - $clog2(N) -2];
+
     XSw1N #(.N(M), .D(P))
       Sw1N (.clk (clk), .rstn (rstn),
             .vld_s(vld_s[i]), .gnt_s(gnt_s[i]), .pld_s(pld_s[i*P +: P]), .tgt_s(i_tgt[i]),
@@ -71,7 +75,7 @@ endgenerate
       end
 
       always_ff @(posedge clk)
-        assume (lut == 9'b100_010_001);
+        assume (cfg_lut == 9'b100_010_001);
     `endif
   `else
   `endif

@@ -2,49 +2,52 @@
 
 // Non bufferred, bytelane based Upsizer/Downsizer for data
 // Payload has DST_ID (=LU_N) + SRC_ID + AccessType + ADDR + ... + WrapType + Strb + real Data
-module XSz #(parameter M = 3, N = 2, A = 19, DI = 32, DO = 64, PI = 40, PO = 72) (
+module XSz #(parameter M = 3, N = 2, A = 19, DI = 32, DO = 64, PI = 50, PO = 86) (
     input  logic [PI-1:0] pld_s
   , output logic [PO-1:0] pld_m
 );
 
-localparam HIDX = $clog2 (DO/8) - 1;
-localparam LIDX = $clog2 (DI/8);
-
 localparam SO  = DO / 8;
+localparam SI  = DI / 8;
+
+localparam HIDX = $clog2 (SO) - 1;
+localparam LIDX = $clog2 (SI);
+
 
 localparam MUL_DW       = $clog2(DI);
-localparam MUL_DW_1_8th = $clog2(DI/8);
+localparam MUL_DW_1_8th = $clog2(SI);
 
-logic [DI-1:0]   i_dat;
-logic [DO-1:0]   o_dat;
-logic [DI/8-1:0] i_stb;
-logic [DO/8-1:0] o_stb;
-logic [A-1:0]    i_adr;
+logic [DI-1:0] i_dat;
+logic [SI-1:0] i_stb;
+logic [A-1:0]  i_adr;
+
+logic [DO-1:0] o_dat;
+logic [SO-1:0] o_stb;
 
 assign i_dat = pld_s [DI-1 : 0];
-assign i_stb = pld_s [DI  +: DI/8];
-assign i_adr = pld_s [PI - $clog2(N) + $clog2(M) - 
+assign i_stb = pld_s [DI  +: SI];
+assign i_adr = pld_s [PI - ($clog2(N) + $clog2(M)) - 1 -: A];
+
+assign pld_m = {pld_s [PI-1 : DI + SI], o_stb, o_dat};
+
 /* verilator lint_off WIDTH */
 generate
   if (DI < DO) begin: upsizer
     always @(*) begin
-    	strb_m = {(SO){1'b0}};
-    	dat_m  = {(DO){1'b0}};
-    	strb_m [(adr_s [HIDX:LIDX] << MUL_DW_1_8th) +: (DI/8)] = strb_s;
-    	dat_m  [(adr_s [HIDX:LIDX] << MUL_DW) +: DI] = dat_s;
+    	o_stb = {(SO){1'b0}};
+    	o_dat = {(DO){1'b0}};
+    	o_stb [(i_adr [HIDX:LIDX] << MUL_DW_1_8th) +: (SI)] = i_stb;
+    	o_dat [(i_adr [HIDX:LIDX] << MUL_DW) +: DI] = i_dat;
     end
   end else if (DI > DO) begin: downsizer
-    assign dat_m  = dat_s  [(adr_s [HIDX:LIDX] << MUL_DW) +: DI];
-    assign strb_m = strb_s [(DWO + (adr_s [HIDX:LIDX] << MUL_DW_1_8th)) +: (DI/8)];
+    assign o_dat = i_dat [(i_adr [HIDX:LIDX] << MUL_DW) +: DI];
+    assign o_stb = i_stb [(DO + (i_adr [HIDX:LIDX] << MUL_DW_1_8th)) +: (SI)];
   end else begin: keepsizer
-    assign dat_m  = dat_s;
-    assign strb_m = strb_s;
+    assign o_dat = i_dat;
+    assign o_stb = i_stb;
   end
 endgenerate
 /* verilator lint_on WIDTH */
-
-assign adr_m = adr_s;
-assign sb_m  = sb_s;
 
 endmodule
 // EOF
