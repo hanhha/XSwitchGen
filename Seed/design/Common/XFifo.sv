@@ -8,8 +8,8 @@ module XFifo #(parameter DW = 8, DEPTH = 4) (
   , input  logic we
   , input  logic re
 
-	, input  [DW-1:0] din
-	, output [DW-1:0] dout
+	, input  [DW-1:0] d
+	, output [DW-1:0] q
 
   , output logic full_n
   , output logic empty_n
@@ -25,7 +25,7 @@ XFifoCtrl #(DEPTH)
 				.we_ok(we_ok), .wptr(wptr), .rptr(rptr));
 
 XTPMem #(.DW(DW), .DEPTH(DEPTH))
-	Mem (.clk(clk), .we(we_ok), .waddr(wptr), .raddr(rptr), .d(din), .q(dout));
+	Mem (.clk(clk), .we(we_ok), .waddr(wptr), .raddr(rptr), .d(d), .q(q));
 
 endmodule
 
