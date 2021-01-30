@@ -44,7 +44,7 @@ XRs #(.D_WIDTH (FB_VDW))
 `ifndef SYNTHESIS
   `ifndef RICHMAN
 		/* verilator lint_off WIDTH */
-    always_ff @(posedge clk)  begin: assume_id 
+    always @(posedge clk)  begin: assume_id 
       if (rstn) begin
         if (t_vld) assume (t_pld [TP-1 -: M] == ID [M-1:0]);
       end

@@ -1,0 +1,19 @@
+[options]
+mode bmc 
+multiclock on
+
+[engines]
+smtbmc yices 
+#smtbmc boolector 
+
+[script]
+read_verilog -sv -formal XLFf.sv
+read_verilog -sv -formal XCC.sv
+hierarchy -top XLFf
+proc
+setattr -set keep 1 w:\* 
+prep
+
+[files]
+XLFf.sv
+XCC.sv

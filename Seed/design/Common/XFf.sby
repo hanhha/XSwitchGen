@@ -1,0 +1,22 @@
+[options]
+mode prove 
+multiclock on
+
+[engines]
+#abc bmc3
+smtbmc
+#boolector
+
+[script]
+read_verilog -sv -formal XFf.sv
+read_verilog -sv -formal XCC.sv
+read_verilog -sv XTPMem.sv
+hierarchy -top XFf
+proc
+setattr -set keep 1 w:\* 
+prep
+
+[files]
+XFf.sv
+XCC.sv
+../Models/Rams/XTPMem.sv

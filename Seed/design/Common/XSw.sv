@@ -69,12 +69,12 @@ endgenerate
   `ifndef RICHMAN
     `ifdef FORMAL
       logic init = 1'b1;
-      always_ff @(posedge clk) begin
+      always @(posedge clk) begin
         init <= 1'b0;
         if (init) assume (~rstn);
       end
 
-      always_ff @(posedge clk)
+      always @(posedge clk)
         assume (cfg_lut == 9'b100_010_001);
     `endif
   `else
@@ -110,7 +110,7 @@ end
 `ifndef SYNTHESIS
   `ifndef RICHMAN
 		/* verilator lint_off WIDTH */
-    always_ff @(posedge clk) begin: onehot_check
+    always @(posedge clk) begin: onehot_check
       integer ai;
       integer ones;
 
@@ -205,7 +205,7 @@ endgenerate
 `ifndef SYNTHESIS
   `ifndef RICHMAN
 		/* verilator lint_off WIDTH */
-    always_ff @(posedge clk)  begin: onehot1_check
+    always @(posedge clk)  begin: onehot1_check
       integer ones;
       integer ai;
 
